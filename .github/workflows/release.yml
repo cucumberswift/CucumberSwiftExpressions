@@ -163,8 +163,8 @@ jobs:
 
   # DocC runs project and dependency code, so it builds with read access only.
   # It builds twice, because DocC bakes the hosting path into its output: once
-  # for /docs/X.x/ and once for /docs/. The site that publishes the docs decides
-  # which releases go where.
+  # for /docs/expressions/X.x/ and once for /docs/expressions/. The site that
+  # publishes the docs decides which releases go where.
   docs-build:
     needs: plan
     if: ${{ !inputs.dry_run }}
