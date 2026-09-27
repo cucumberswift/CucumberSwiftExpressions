@@ -34,6 +34,9 @@ env:
   # Version files the release commit updates. A file that does not exist is skipped.
   PODSPEC: CucumberSwiftExpressions.podspec
   DOCC_TARGET: CucumberSwiftExpressions
+  # Where the docs are served on https://cucumberswift.org. DocC bakes this path
+  # into its output, so it must not change once a release carries docs.
+  DOCS_PATH: docs/expressions
   # The commit this run releases, fixed when the run starts.
   RELEASE_SHA: ${{ github.sha }}
 
@@ -160,8 +163,8 @@ jobs:
 
   # DocC runs project and dependency code, so it builds with read access only.
   # It builds twice, because DocC bakes the hosting path into its output: once
-  # for /X.x/ and once for the site root. The Docs workflow decides which
-  # releases go where.
+  # for /docs/X.x/ and once for /docs/. The site that publishes the docs decides
+  # which releases go where.
   docs-build:
     needs: plan
     if: ${{ !inputs.dry_run }}
@@ -170,14 +173,13 @@ jobs:
     permissions:
       contents: read
     env:
-      REPO_NAME: ${{ github.event.repository.name }}
       VERSION: ${{ needs.plan.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      # Artifact file names may not contain ":", which DocC uses. Each site is packed in one file.
+      # Zipped, because artifact file names may not contain ":", which DocC uses.
       - name: Generate DocC static sites
         run: |
           build() {
@@ -189,8 +191,8 @@ jobs:
               --output-path "$2"
             (cd "$2" && zip -qr "$GITHUB_WORKSPACE/$3" .)
           }
-          build "$REPO_NAME/${VERSION%%.*}.x" docs-major docs-major.zip
-          build "$REPO_NAME" docs-root docs-root.zip
+          build "$DOCS_PATH/${VERSION%%.*}.x" docs-major docs-major.zip
+          build "$DOCS_PATH" docs-root docs-root.zip
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: docs
