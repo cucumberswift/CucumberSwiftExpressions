@@ -329,9 +329,11 @@ def publish():
         print(f"Reusing the tag {version} from an earlier attempt.")
 
     # The release: create it once. An existing release is never replaced or edited.
+    # The docs are attached as it is created, so a release never exists without them.
     if api(f"repos/{repo}/releases/tags/{version}", allow=(404,)) is None:
         subprocess.run(["gh", "release", "create", version, "--verify-tag", "--title", f"Release {version}",
-                        "--notes-file", "notes.md", f"--latest={latest}"], check=True)
+                        "--notes-file", "notes.md", f"--latest={latest}",
+                        "docs-major.zip", "docs-root.zip"], check=True)
     else:
         print(f"The release {version} already exists. Nothing to do.")
     append("GITHUB_STEP_SUMMARY", f"Released {version} at {commit}.\n")
