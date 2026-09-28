@@ -169,7 +169,7 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
         var index = 0
         var count = 0
         var topLevel = [Int]()
-        private var open = [Bool]() // one entry per open parenthesis: is it a capture group?
+        private var open = [(isCapture: Bool, extendedBefore: Bool)]() // one entry per open parenthesis
         private var classDepth = 0
         private var extended = false // `(?x)`: `#` starts a comment that runs to the end of the line
 
@@ -212,31 +212,39 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
         private mutating func scanOutsideClass(_ character: Character) {
             switch character {
                 case "[": classDepth = 1
-                case ")": _ = open.popLast()
+                case ")": closeGroup()
                 case "(": openGroup()
                 default: break
             }
         }
 
+        private mutating func closeGroup() {
+            // Flags set inside a group, such as `(?x:`, end with it.
+            if let group = open.popLast() { extended = group.extendedBefore }
+        }
+
         private mutating func openGroup() {
+            let extendedBefore = extended
             var isCapture = true
+            var isFlagOnlyGroup = false
             if peek(1) == "?" {
                 if peek(2) == "#" { // `(?# comment )`
                     skip(until: ")")
                     return
                 }
                 isCapture = peek(2) == "<" && peek(3) != "=" && peek(3) != "!"
-                enableExtendedModeIfFlagged()
+                isFlagOnlyGroup = enableExtendedModeIfFlagged()
             }
             if isCapture {
                 count += 1
-                if !open.contains(true) { topLevel.append(count) }
+                if !open.contains(where: \.isCapture) { topLevel.append(count) }
             }
-            open.append(isCapture)
+            // `(?x)` has no body of its own: it changes the mode for the rest of the enclosing group.
+            open.append((isCapture, isFlagOnlyGroup ? extended : extendedBefore))
         }
 
-        /// Recognises `(?x)`, `(?ix)`, `(?x-i:` and similar flag groups.
-        private mutating func enableExtendedModeIfFlagged() {
+        /// Recognises `(?x)`, `(?ix)`, `(?x-i:` and similar flag groups, and says whether it was `(?flags)` alone.
+        private mutating func enableExtendedModeIfFlagged() -> Bool {
             var offset = 2
             var isOn = true
             while let flag = peek(offset), flag.isLetter || flag == "-" {
@@ -244,6 +252,7 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
                 if flag == "x" { extended = isOn }
                 offset += 1
             }
+            return peek(offset) == ")"
         }
     }
 }
