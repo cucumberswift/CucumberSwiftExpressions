@@ -173,6 +173,22 @@ final class CucumberSwiftExpressionsTests: XCTestCase {
         XCTAssertEqual(try match.allParameters(\.anonymous), ["42", "Alice"])
     }
 
+    func testOnlyTopLevelCaptureGroupsAreParameters() throws {
+        let match = try XCTUnwrap(CucumberExpression("^((a)|(b))$").match(in: "a"))
+        XCTAssertEqual(try match.allParameters(\.anonymous), ["a"])
+    }
+
+    func testNonCapturingLookaheadAndClassParenthesesAreNotGroups() throws {
+        let match = try XCTUnwrap(CucumberExpression(#"^(?:x)(?=y)y[(]\((\d)\)$"#).match(in: "xy((3)"))
+        XCTAssertEqual(try match.allParameters(\.anonymous), ["3"])
+    }
+
+    func testUnmatchedOptionalCaptureKeepsItsPosition() throws {
+        let match = try XCTUnwrap(CucumberExpression("^(a)?(b)$").match(in: "b"))
+        XCTAssertEqual(try match.allParameters(\.anonymous), ["", "b"])
+        XCTAssertEqual(match[\.anonymous, index: 1], "b")
+    }
+
     func testSlashesInsideACucumberExpressionAreStillAlternation() {
         let expression = CucumberExpression("a/b")
         XCTAssertEqual(expression.regex, "^(?:a|b)$")

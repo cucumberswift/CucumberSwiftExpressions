@@ -11,7 +11,7 @@ import Foundation
 public struct CucumberExpression: ExpressibleByStringLiteral {
     private enum Storage {
         case expression([Lexer.Token])
-        case regularExpression(NSRegularExpression)
+        case regularExpression(NSRegularExpression, topLevelGroups: [Int])
     }
 
     private let storage: Storage
@@ -19,7 +19,7 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
     public var regex: String {
         switch storage {
             case .expression(let tokens): return Self.regex(for: tokens)
-            case .regularExpression(let regularExpression): return regularExpression.pattern
+            case .regularExpression(let regularExpression, _): return regularExpression.pattern
         }
     }
 
@@ -60,20 +60,21 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
     /// step definition, so this traps rather than producing an expression that matches nothing.
     public init(_ str: String) {
         if str.first == "^" || str.last == "$" {
-            storage = .regularExpression(Self.compile(str, in: str, reason: "starts with ^ or ends with $",
-                                                        fix: "Remove the anchors, or write a valid regular expression."))
+            storage = Self.compile(str, in: str, reason: "starts with ^ or ends with $",
+                                   fix: "Remove the anchors, or write a valid regular expression.")
         } else if str.count >= 2, str.first == "/", str.last == "/" {
             let pattern = String(str.dropFirst().dropLast())
-            storage = .regularExpression(Self.compile(pattern, in: str, reason: "is written between slashes",
-                                                        fix: "Remove the slashes, or write a valid regular expression."))
+            storage = Self.compile(pattern, in: str, reason: "is written between slashes",
+                                   fix: "Remove the slashes, or write a valid regular expression.")
         } else {
             storage = .expression(Lexer(str).lex())
         }
     }
 
-    private static func compile(_ pattern: String, in expression: String, reason: String, fix: String) -> NSRegularExpression {
+    private static func compile(_ pattern: String, in expression: String, reason: String, fix: String) -> Storage {
         do {
-            return try NSRegularExpression(pattern: pattern)
+            let regularExpression = try NSRegularExpression(pattern: pattern)
+            return .regularExpression(regularExpression, topLevelGroups: topLevelGroups(of: regularExpression))
         } catch {
             preconditionFailure("""
                 CucumberExpression: "\(expression)" \(reason), so it is treated as a regular expression, \
@@ -85,20 +86,70 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
     public func match(in str: String) -> Match? {
         switch storage {
             case .expression(let tokens): return match(in: str, tokens: tokens)
-            case .regularExpression(let regularExpression): return match(in: str, regularExpression: regularExpression)
+            case .regularExpression(let regularExpression, let groups): return match(in: str, regularExpression: regularExpression, groups: groups)
         }
     }
 
-    /// Every capture group becomes an anonymous parameter, so its text is available through `\.anonymous`.
-    private func match(in str: String, regularExpression: NSRegularExpression) -> Match? {
+    /// Every top-level capture group becomes an anonymous parameter, so its text is available through
+    /// `\.anonymous`. As upstream, groups nested inside another group are not arguments, and a group
+    /// that did not take part in the match keeps its position with empty text.
+    private func match(in str: String, regularExpression: NSRegularExpression, groups: [Int]) -> Match? {
         guard let result = regularExpression.firstMatch(in: str, range: NSRange(str.startIndex..., in: str)) else { return nil }
         let match = Match()
-        for group in 1..<max(result.numberOfRanges, 1) {
-            guard let range = Range(result.range(at: group), in: str) else { continue }
+        for group in groups where group < result.numberOfRanges {
+            let text = Range(result.range(at: group), in: str).map { String(str[$0]) } ?? ""
             match.append(.parameter(Position(line: 0, column: UInt(group)), AnonymousParameter.name),
-                         matchedText: String(str[range]))
+                         matchedText: text)
         }
         return match
+    }
+
+    /// The numbers of the capture groups that are not nested inside another capture group.
+    private static func topLevelGroups(of regularExpression: NSRegularExpression) -> [Int] {
+        let characters = Array(regularExpression.pattern)
+        var open = [Bool]() // one entry per open parenthesis: is it a capture group?
+        var groups = [Int]()
+        var count = 0
+        var classDepth = 0
+        var index = 0
+        while index < characters.count {
+            let character = characters[index]
+            if character == "\\" {
+                if index + 1 < characters.count, characters[index + 1] == "Q" {
+                    index += 2
+                    while index < characters.count, !(characters[index] == "\\" && index + 1 < characters.count && characters[index + 1] == "E") {
+                        index += 1
+                    }
+                    index += 2
+                    continue
+                }
+                index += 2
+                continue
+            }
+            if classDepth > 0 {
+                if character == "[" { classDepth += 1 } else if character == "]" { classDepth -= 1 }
+            } else if character == "[" {
+                classDepth = 1
+            } else if character == "(" {
+                var isCapture = true
+                if index + 1 < characters.count, characters[index + 1] == "?" {
+                    let next = index + 2 < characters.count ? characters[index + 2] : " "
+                    let afterNext = index + 3 < characters.count ? characters[index + 3] : " "
+                    isCapture = next == "<" && afterNext != "=" && afterNext != "!"
+                }
+                if isCapture {
+                    count += 1
+                    if !open.contains(true) { groups.append(count) }
+                }
+                open.append(isCapture)
+            } else if character == ")" {
+                _ = open.popLast()
+            }
+            index += 1
+        }
+        // If this scan ever disagrees with ICU, expose every group rather than guess.
+        let total = regularExpression.numberOfCaptureGroups
+        return count == total ? groups : Array(stride(from: 1, through: total, by: 1))
     }
 
     private func match(in str: String, tokens: [Lexer.Token]) -> Match? {
