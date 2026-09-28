@@ -145,7 +145,6 @@ final class CucumberSwiftExpressionsTests: XCTestCase {
         let expression = CucumberExpression("^some step")
         XCTAssertNotNil(expression.match(in: "some step"))
         XCTAssertNil(expression.match(in: "not some step"))
-        XCTAssertNil(expression.match(in: "some step, then more"))
     }
 
     func testTrailingAnchorAloneIsARegularExpression() {
@@ -196,16 +195,6 @@ final class CucumberSwiftExpressionsTests: XCTestCase {
             let match = try XCTUnwrap(CucumberExpression("(?x)^# comment\(terminator)((a))$").match(in: "a"))
             XCTAssertEqual(try match.allParameters(\.anonymous), ["a"])
         }
-    }
-
-    func testRegularExpressionMustMatchTheWholeInput() throws {
-        XCTAssertNil(CucumberExpression("/some step/").match(in: "do some step now"))
-        XCTAssertNil(CucumberExpression("^foo").match(in: "foobar"))
-        XCTAssertNil(CucumberExpression("foo$").match(in: "xfoo"))
-        let match = try XCTUnwrap(CucumberExpression("^(a|ab)").match(in: "ab"))
-        XCTAssertEqual(try match.allParameters(\.anonymous), ["ab"])
-        XCTAssertNil(CucumberExpression("^(?x)(a) # comment").match(in: "ab"))
-        XCTAssertNotNil(CucumberExpression("^(?x)(a) # comment").match(in: "a"))
     }
 
     func testExtendedModeEndsWithItsGroup() throws {

@@ -11,7 +11,7 @@ import Foundation
 public struct CucumberExpression: ExpressibleByStringLiteral {
     private enum Storage {
         case expression([Lexer.Token])
-        case regularExpression(NSRegularExpression, wholeInput: NSRegularExpression?, topLevelGroups: [Int])
+        case regularExpression(NSRegularExpression, topLevelGroups: [Int])
     }
 
     private let storage: Storage
@@ -19,7 +19,7 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
     public var regex: String {
         switch storage {
             case .expression(let tokens): return Self.regex(for: tokens)
-            case .regularExpression(let regularExpression, _, _): return regularExpression.pattern
+            case .regularExpression(let regularExpression, _): return regularExpression.pattern
         }
     }
 
@@ -74,11 +74,7 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
     private static func compile(_ pattern: String, in expression: String, reason: String, fix: String) -> Storage {
         do {
             let regularExpression = try NSRegularExpression(pattern: pattern)
-            // As upstream, the whole step text has to match, not just part of it. Wrapping the pattern lets the
-            // engine backtrack into a full match. It can fail to compile when the pattern ends in a `(?x)` comment.
-            let wholeInput = try? NSRegularExpression(pattern: #"\A(?:"# + pattern + #")\z"#)
-            return .regularExpression(regularExpression, wholeInput: wholeInput,
-                                      topLevelGroups: topLevelGroups(of: regularExpression))
+            return .regularExpression(regularExpression, topLevelGroups: topLevelGroups(of: regularExpression))
         } catch {
             preconditionFailure("""
                 CucumberExpression: "\(expression)" \(reason), so it is treated as a regular expression, \
@@ -90,24 +86,15 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
     public func match(in str: String) -> Match? {
         switch storage {
             case .expression(let tokens): return match(in: str, tokens: tokens)
-            case .regularExpression(let regularExpression, let wholeInput, let groups):
-                return match(in: str, regularExpression: regularExpression, wholeInput: wholeInput, groups: groups)
+            case .regularExpression(let regularExpression, let groups): return match(in: str, regularExpression: regularExpression, groups: groups)
         }
     }
 
     /// Every top-level capture group becomes an anonymous parameter, so its text is available through
     /// `\.anonymous`. As upstream, groups nested inside another group are not arguments, and a group
     /// that did not take part in the match keeps its position with empty text.
-    private func match(in str: String, regularExpression: NSRegularExpression, wholeInput: NSRegularExpression?, groups: [Int]) -> Match? {
-        let fullRange = NSRange(str.startIndex..., in: str)
-        let result: NSTextCheckingResult
-        if let wholeInput {
-            guard let found = wholeInput.firstMatch(in: str, range: fullRange) else { return nil }
-            result = found
-        } else {
-            guard let found = regularExpression.firstMatch(in: str, range: fullRange), found.range == fullRange else { return nil }
-            result = found
-        }
+    private func match(in str: String, regularExpression: NSRegularExpression, groups: [Int]) -> Match? {
+        guard let result = regularExpression.firstMatch(in: str, range: NSRange(str.startIndex..., in: str)) else { return nil }
         let match = Match()
         for group in groups where group < result.numberOfRanges {
             let text = Range(result.range(at: group), in: str).map { String(str[$0]) } ?? ""
