@@ -104,54 +104,6 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
         return match
     }
 
-    /// The numbers of the capture groups that are not nested inside another capture group.
-    private static func topLevelGroups(of regularExpression: NSRegularExpression) -> [Int] {
-        let characters = Array(regularExpression.pattern)
-        var open = [Bool]() // one entry per open parenthesis: is it a capture group?
-        var groups = [Int]()
-        var count = 0
-        var classDepth = 0
-        var index = 0
-        while index < characters.count {
-            let character = characters[index]
-            if character == "\\" {
-                if index + 1 < characters.count, characters[index + 1] == "Q" {
-                    index += 2
-                    while index < characters.count, !(characters[index] == "\\" && index + 1 < characters.count && characters[index + 1] == "E") {
-                        index += 1
-                    }
-                    index += 2
-                    continue
-                }
-                index += 2
-                continue
-            }
-            if classDepth > 0 {
-                if character == "[" { classDepth += 1 } else if character == "]" { classDepth -= 1 }
-            } else if character == "[" {
-                classDepth = 1
-            } else if character == "(" {
-                var isCapture = true
-                if index + 1 < characters.count, characters[index + 1] == "?" {
-                    let next = index + 2 < characters.count ? characters[index + 2] : " "
-                    let afterNext = index + 3 < characters.count ? characters[index + 3] : " "
-                    isCapture = next == "<" && afterNext != "=" && afterNext != "!"
-                }
-                if isCapture {
-                    count += 1
-                    if !open.contains(true) { groups.append(count) }
-                }
-                open.append(isCapture)
-            } else if character == ")" {
-                _ = open.popLast()
-            }
-            index += 1
-        }
-        // If this scan ever disagrees with ICU, expose every group rather than guess.
-        let total = regularExpression.numberOfCaptureGroups
-        return count == total ? groups : Array(stride(from: 1, through: total, by: 1))
-    }
-
     private func match(in str: String, tokens: [Lexer.Token]) -> Match? {
         let match = Match()
         let parameters = tokens.filter { $0.isParameter }
@@ -199,6 +151,99 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
             return matches
         } catch {
             return []
+        }
+    }
+
+    /// The numbers of the capture groups that are not nested inside another capture group.
+    private static func topLevelGroups(of regularExpression: NSRegularExpression) -> [Int] {
+        var scanner = GroupScanner(Array(regularExpression.pattern))
+        scanner.scan()
+        // If this scan ever disagrees with ICU, expose every group rather than guess.
+        let total = regularExpression.numberOfCaptureGroups
+        return scanner.count == total ? scanner.topLevel : Array(stride(from: 1, through: total, by: 1))
+    }
+
+    /// Walks an ICU pattern and records which capture groups are not nested inside another one.
+    private struct GroupScanner {
+        let characters: [Character]
+        var index = 0
+        var count = 0
+        var topLevel = [Int]()
+        private var open = [Bool]() // one entry per open parenthesis: is it a capture group?
+        private var classDepth = 0
+        private var extended = false // `(?x)`: `#` starts a comment that runs to the end of the line
+
+        init(_ characters: [Character]) {
+            self.characters = characters
+        }
+
+        mutating func scan() {
+            while index < characters.count {
+                let character = characters[index]
+                if character == "\\" {
+                    skipEscape()
+                } else if classDepth > 0 {
+                    if character == "[" { classDepth += 1 } else if character == "]" { classDepth -= 1 }
+                    index += 1
+                } else if character == "#" && extended {
+                    skip(until: "\n")
+                } else {
+                    scanOutsideClass(character)
+                    index += 1
+                }
+            }
+        }
+
+        private func peek(_ offset: Int) -> Character? {
+            index + offset < characters.count ? characters[index + offset] : nil
+        }
+
+        private mutating func skipEscape() {
+            guard peek(1) == "Q" else { index += 2; return }
+            index += 2
+            while index < characters.count, !(characters[index] == "\\" && peek(1) == "E") { index += 1 }
+            index += 2
+        }
+
+        private mutating func skip(until terminator: Character) {
+            while index < characters.count, characters[index] != terminator { index += 1 }
+        }
+
+        private mutating func scanOutsideClass(_ character: Character) {
+            switch character {
+                case "[": classDepth = 1
+                case ")": _ = open.popLast()
+                case "(": openGroup()
+                default: break
+            }
+        }
+
+        private mutating func openGroup() {
+            var isCapture = true
+            if peek(1) == "?" {
+                if peek(2) == "#" { // `(?# comment )`
+                    skip(until: ")")
+                    return
+                }
+                isCapture = peek(2) == "<" && peek(3) != "=" && peek(3) != "!"
+                enableExtendedModeIfFlagged()
+            }
+            if isCapture {
+                count += 1
+                if !open.contains(true) { topLevel.append(count) }
+            }
+            open.append(isCapture)
+        }
+
+        /// Recognises `(?x)`, `(?ix)`, `(?x-i:` and similar flag groups.
+        private mutating func enableExtendedModeIfFlagged() {
+            var offset = 2
+            var isOn = true
+            while let flag = peek(offset), flag.isLetter || flag == "-" {
+                if flag == "-" { isOn = false }
+                if flag == "x" { extended = isOn }
+                offset += 1
+            }
         }
     }
 }
