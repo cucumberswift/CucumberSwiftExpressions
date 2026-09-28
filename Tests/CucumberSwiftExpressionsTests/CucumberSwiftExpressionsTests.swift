@@ -197,6 +197,16 @@ final class CucumberSwiftExpressionsTests: XCTestCase {
         }
     }
 
+    func testRegularExpressionSearchesTheStepText() throws {
+        // Like a plain regular expression, a pattern matches part of the step text unless both ends are anchored.
+        XCTAssertNotNil(CucumberExpression("/some step/").match(in: "do some step now"))
+        XCTAssertNotNil(CucumberExpression("^foo").match(in: "foobar"))
+        XCTAssertNotNil(CucumberExpression("foo$").match(in: "xfoo"))
+        XCTAssertNil(CucumberExpression("^foo$").match(in: "foobar"))
+        let match = try XCTUnwrap(CucumberExpression(#"^I have (\d+) cukes"#).match(in: "I have 5 cukes in my belly"))
+        XCTAssertEqual(try match.allParameters(\.anonymous), ["5"])
+    }
+
     func testExtendedModeEndsWithItsGroup() throws {
         let scoped = try XCTUnwrap(CucumberExpression("^(?x: a )((b)#)(c)$").match(in: "ab#c"))
         XCTAssertEqual(try scoped.allParameters(\.anonymous), ["b#", "c"])
