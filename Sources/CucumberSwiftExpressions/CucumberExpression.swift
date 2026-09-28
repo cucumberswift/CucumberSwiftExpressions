@@ -9,9 +9,21 @@
 import Foundation
 
 public struct CucumberExpression: ExpressibleByStringLiteral {
-    private let tokens: [Lexer.Token]
+    private enum Storage {
+        case expression([Lexer.Token])
+        case regularExpression(NSRegularExpression)
+    }
+
+    private let storage: Storage
 
     public var regex: String {
+        switch storage {
+            case .expression(let tokens): return Self.regex(for: tokens)
+            case .regularExpression(let regularExpression): return regularExpression.pattern
+        }
+    }
+
+    private static func regex(for tokens: [Lexer.Token]) -> String {
         tokens
             .lazy
             .map {
@@ -39,14 +51,60 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
         self.init(value)
     }
 
+    /// Creates an expression from a string, using the same heuristics as the reference implementation:
+    /// a string that starts with `^` or ends with `$` is a regular expression, a string written as
+    /// `/pattern/` is a regular expression (the slashes are not part of the pattern), and anything else
+    /// is a Cucumber expression.
+    ///
+    /// A string that is treated as a regular expression but is not a valid one is a mistake in the
+    /// step definition, so this traps rather than producing an expression that matches nothing.
     public init(_ str: String) {
-        tokens = Lexer(str).lex()
+        if str.first == "^" || str.last == "$" {
+            storage = .regularExpression(Self.compile(str, in: str, reason: "starts with ^ or ends with $",
+                                                        fix: "Remove the anchors, or write a valid regular expression."))
+        } else if str.count >= 2, str.first == "/", str.last == "/" {
+            let pattern = String(str.dropFirst().dropLast())
+            storage = .regularExpression(Self.compile(pattern, in: str, reason: "is written between slashes",
+                                                        fix: "Remove the slashes, or write a valid regular expression."))
+        } else {
+            storage = .expression(Lexer(str).lex())
+        }
+    }
+
+    private static func compile(_ pattern: String, in expression: String, reason: String, fix: String) -> NSRegularExpression {
+        do {
+            return try NSRegularExpression(pattern: pattern)
+        } catch {
+            preconditionFailure("""
+                CucumberExpression: "\(expression)" \(reason), so it is treated as a regular expression, \
+                but it is not valid as one. \(fix)
+                """)
+        }
     }
 
     public func match(in str: String) -> Match? {
+        switch storage {
+            case .expression(let tokens): return match(in: str, tokens: tokens)
+            case .regularExpression(let regularExpression): return match(in: str, regularExpression: regularExpression)
+        }
+    }
+
+    /// Every capture group becomes an anonymous parameter, so its text is available through `\.anonymous`.
+    private func match(in str: String, regularExpression: NSRegularExpression) -> Match? {
+        guard let result = regularExpression.firstMatch(in: str, range: NSRange(str.startIndex..., in: str)) else { return nil }
+        let match = Match()
+        for group in 1..<max(result.numberOfRanges, 1) {
+            guard let range = Range(result.range(at: group), in: str) else { continue }
+            match.append(.parameter(Position(line: 0, column: UInt(group)), AnonymousParameter.name),
+                         matchedText: String(str[range]))
+        }
+        return match
+    }
+
+    private func match(in str: String, tokens: [Lexer.Token]) -> Match? {
         let match = Match()
         let parameters = tokens.filter { $0.isParameter }
-        let regexMatches = matches(in: str, regex: regex)
+        let regexMatches = matches(in: str, regex: Self.regex(for: tokens))
         
         guard !regexMatches.isEmpty else { return nil }
         
