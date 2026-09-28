@@ -190,6 +190,13 @@ final class CucumberSwiftExpressionsTests: XCTestCase {
         XCTAssertEqual(try inline.allParameters(\.anonymous), ["a"])
     }
 
+    func testExtendedModeCommentsEndAtAnyLineTerminator() throws {
+        for terminator in ["\n", "\r", "\r\n"] {
+            let match = try XCTUnwrap(CucumberExpression("(?x)^# comment\(terminator)((a))$").match(in: "a"))
+            XCTAssertEqual(try match.allParameters(\.anonymous), ["a"])
+        }
+    }
+
     func testExtendedModeEndsWithItsGroup() throws {
         let scoped = try XCTUnwrap(CucumberExpression("^(?x: a )((b)#)(c)$").match(in: "ab#c"))
         XCTAssertEqual(try scoped.allParameters(\.anonymous), ["b#", "c"])

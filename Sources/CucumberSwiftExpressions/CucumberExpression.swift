@@ -186,7 +186,7 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
                     if character == "[" { classDepth += 1 } else if character == "]" { classDepth -= 1 }
                     index += 1
                 } else if character == "#" && extended {
-                    skip(until: "\n")
+                    skipComment()
                 } else {
                     scanOutsideClass(character)
                     index += 1
@@ -203,6 +203,11 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
             index += 2
             while index < characters.count, !(characters[index] == "\\" && peek(1) == "E") { index += 1 }
             index += 2
+        }
+
+        /// A `(?x)` comment ends at any line terminator, including a lone CR or a CRLF pair.
+        private mutating func skipComment() {
+            while index < characters.count, !characters[index].isNewline { index += 1 }
         }
 
         private mutating func skip(until terminator: Character) {
