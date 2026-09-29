@@ -1,4 +1,4 @@
-# ``CucumberExpression``
+# ``CucumberSwiftExpressions``
 
 A cucumber expressions implementation in Swift.
 
