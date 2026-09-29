@@ -263,6 +263,8 @@ final class CucumberSwiftExpressionsTests: XCTestCase {
         XCTAssertNotNil(expression.invalidRegularExpression)
     }
 
+#if compiler(>=5.7) && canImport(_StringProcessing)
+    // Swift's regular expression parser, which says what is wrong with a pattern, needs Swift 5.7.
     func testTheProblemSaysWhatIsWrongWithThePattern() throws {
         guard #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *) else {
             throw XCTSkip("Swift's regular expression parser needs iOS 16, macOS 13, tvOS 16 or watchOS 9")
@@ -283,6 +285,13 @@ final class CucumberSwiftExpressionsTests: XCTestCase {
 
         XCTAssert(error.problem.hasPrefix("The value"), error.problem)
     }
+#else
+    func testWithoutSwiftsParserTheProblemIsFoundationsDescription() throws {
+        let error = try XCTUnwrap(CucumberExpression("^a broken (step runs$").invalidRegularExpression)
+
+        XCTAssert(error.problem.hasPrefix("The value"), error.problem)
+    }
+#endif
 
     func testValidatingInitializerThrowsForAnInvalidRegularExpression() {
         XCTAssertThrowsError(try CucumberExpression(validating: "^a broken (step runs$")) { error in
