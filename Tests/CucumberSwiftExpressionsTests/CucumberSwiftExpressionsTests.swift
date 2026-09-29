@@ -235,6 +235,62 @@ final class CucumberSwiftExpressionsTests: XCTestCase {
         let escaped = try XCTUnwrap(CucumberExpression(#"^I owe (\d+)\$"#).match(in: "I owe 5$"))
         XCTAssertEqual(try escaped.first(\.anonymous), "5")
     }
+
+    func testAnInvalidAnchoredRegularExpressionIsKeptInsteadOfTrapping() throws {
+        let expression = CucumberExpression("^a broken (step runs$")
+
+        let error = try XCTUnwrap(expression.invalidRegularExpression)
+        XCTAssertEqual(error.expression, "^a broken (step runs$")
+        XCTAssertEqual(error.pattern, "^a broken (step runs$")
+        XCTAssertEqual(expression.regex, "^a broken (step runs$")
+        XCTAssert(error.description.hasPrefix(#"CucumberExpression: "^a broken (step runs$" starts with ^ or ends with $"#),
+                  error.description)
+        XCTAssert(error.description.hasSuffix("Remove the anchors, or write a valid regular expression."), error.description)
+    }
+
+    func testAnInvalidSlashDelimitedRegularExpressionIsKeptWithoutItsSlashes() throws {
+        let error = try XCTUnwrap(CucumberExpression("/a broken (step runs/").invalidRegularExpression)
+
+        XCTAssertEqual(error.expression, "/a broken (step runs/")
+        XCTAssertEqual(error.pattern, "a broken (step runs")
+        XCTAssert(error.description.contains("is written between slashes"), error.description)
+        XCTAssert(error.description.hasSuffix("Remove the slashes, or write a valid regular expression."), error.description)
+    }
+
+    func testAnInvalidRegularExpressionStringLiteralDoesNotTrap() {
+        let expression: CucumberExpression = "^a broken (step runs$"
+
+        XCTAssertNotNil(expression.invalidRegularExpression)
+    }
+
+    func testTheProblemSaysWhatIsWrongWithThePattern() throws {
+        guard #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *) else {
+            throw XCTSkip("Swift's regular expression parser needs iOS 16, macOS 13, tvOS 16 or watchOS 9")
+        }
+        let error = try XCTUnwrap(CucumberExpression("^a broken (step runs$").invalidRegularExpression)
+
+        XCTAssertEqual(error.problem, "expected ')'")
+        XCTAssert(error.description.contains("but it is not valid as one: expected ')'."), error.description)
+    }
+
+    func testValidatingInitializerThrowsForAnInvalidRegularExpression() {
+        XCTAssertThrowsError(try CucumberExpression(validating: "^a broken (step runs$")) { error in
+            XCTAssertEqual((error as? InvalidRegularExpression)?.pattern, "^a broken (step runs$")
+        }
+    }
+
+    func testValidatingInitializerAcceptsValidExpressions() throws {
+        XCTAssertNotNil(try CucumberExpression(validating: "^some (step)$").match(in: "some step"))
+        XCTAssertNotNil(try CucumberExpression(validating: "I have {int} cukes").match(in: "I have 4 cukes"))
+    }
+
+    func testValidExpressionsAreNotInvalidRegularExpressions() {
+        XCTAssertNil(CucumberExpression("^some step$").invalidRegularExpression)
+        XCTAssertNil(CucumberExpression("/some step/").invalidRegularExpression)
+        XCTAssertNil(CucumberExpression("I have {int} cukes").invalidRegularExpression)
+        XCTAssertNil(CucumberExpression("a (broken step").invalidRegularExpression,
+                     "An unanchored string is a Cucumber expression, not a regular expression")
+    }
 }
 
 // swiftlint:disable:next convenience_type

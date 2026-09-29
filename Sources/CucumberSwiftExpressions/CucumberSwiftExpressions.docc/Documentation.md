@@ -13,3 +13,5 @@ A `CucumberExpression` accepts either kind of pattern, and tells them apart the 
 - Anything else is a Cucumber expression.
 
 In a regular expression, each top-level capture group becomes an anonymous parameter.
+
+If a string is treated as a regular expression but will not compile, creating the expression does not crash. ``CucumberExpression/invalidRegularExpression`` says what is wrong, for example `expected ')'`, and ``CucumberExpression/match(in:)`` traps if you call it anyway. To handle the error with `try` instead, use ``CucumberExpression/init(validating:)``.
