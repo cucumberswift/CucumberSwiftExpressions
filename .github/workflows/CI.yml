@@ -1,6 +1,15 @@
 name: CI
 
-on: [ push, workflow_dispatch ]
+# Pull requests run CI from the pull_request event, so pushes run it only on the
+# long-lived branches: main and the support/N.x release lines. Any other branch
+# runs CI only through a pull request.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - 'support/**'
+  workflow_dispatch:
 
 jobs:
   test:
@@ -15,7 +24,8 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: info.lcov
-          fail_ci_if_error: true
+          # Pull requests from forks have no token, so only a push fails on an upload error.
+          fail_ci_if_error: ${{ github.event_name == 'push' }}
 
   build_for_package_managers:
     needs: test
@@ -26,3 +36,17 @@ jobs:
         run: fastlane build_swiftpm
       - name: Validate Cocoapods Can Deploy (lib lint)
         run: pod lib lint CucumberSwiftExpressions.podspec --allow-warnings
+
+  release_script:
+    name: Release script tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - name: Run the release script tests
+        run: python3 -m unittest discover -s .github/scripts -v
