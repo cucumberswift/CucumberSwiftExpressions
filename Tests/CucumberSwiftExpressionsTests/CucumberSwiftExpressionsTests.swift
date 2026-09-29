@@ -273,6 +273,17 @@ final class CucumberSwiftExpressionsTests: XCTestCase {
         XCTAssert(error.description.contains("but it is not valid as one: expected ')'."), error.description)
     }
 
+    func testAPatternOnlySwiftAcceptsFallsBackToFoundationsDescription() throws {
+        // NSRegularExpression rejects an omitted lower bound; Swift's parser accepts it, so it cannot
+        // say what is wrong, and the problem falls back to Foundation's description.
+        if #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *), (try? Regex("^a{,3}$")) == nil {
+            throw XCTSkip("This platform's Swift regular expression parser rejects the pattern too")
+        }
+        let error = try XCTUnwrap(CucumberExpression("^a{,3}$").invalidRegularExpression)
+
+        XCTAssert(error.problem.hasPrefix("The value"), error.problem)
+    }
+
     func testValidatingInitializerThrowsForAnInvalidRegularExpression() {
         XCTAssertThrowsError(try CucumberExpression(validating: "^a broken (step runs$")) { error in
             XCTAssertEqual((error as? InvalidRegularExpression)?.pattern, "^a broken (step runs$")
