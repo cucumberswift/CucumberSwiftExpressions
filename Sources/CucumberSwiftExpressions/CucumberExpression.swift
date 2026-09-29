@@ -12,6 +12,7 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
     private enum Storage {
         case expression([Lexer.Token])
         case regularExpression(NSRegularExpression, topLevelGroups: [Int])
+        case invalidRegularExpression(InvalidRegularExpression)
     }
 
     private let storage: Storage
@@ -20,7 +21,17 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
         switch storage {
             case .expression(let tokens): return Self.regex(for: tokens)
             case .regularExpression(let regularExpression, _): return regularExpression.pattern
+            case .invalidRegularExpression(let error): return error.pattern
         }
+    }
+
+    /// Why this expression can never match, when it is treated as a regular expression that will not
+    /// compile. `nil` for every other expression.
+    ///
+    /// Check it before calling ``match(in:)``: matching an invalid expression traps.
+    public var invalidRegularExpression: InvalidRegularExpression? {
+        guard case .invalidRegularExpression(let error) = storage else { return nil }
+        return error
     }
 
     private static func regex(for tokens: [Lexer.Token]) -> String {
@@ -57,7 +68,10 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
     /// is a Cucumber expression.
     ///
     /// A string that is treated as a regular expression but is not a valid one is a mistake in the
-    /// step definition, so this traps rather than producing an expression that matches nothing.
+    /// step definition. This does not trap: the expression keeps the error in
+    /// ``invalidRegularExpression``, so a caller such as a test runner can report it where the step
+    /// definition was written. ``match(in:)`` traps if nobody checked. Use ``init(validating:)`` to
+    /// handle the error with `try` instead.
     public init(_ str: String) {
         if str.first == "^" || str.last == "$" {
             storage = Self.compile(str, in: str, reason: "starts with ^ or ends with $",
@@ -71,22 +85,47 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
         }
     }
 
+    /// Creates an expression as ``init(_:)`` does, but throws when the string is treated as a regular
+    /// expression that will not compile.
+    /// - Throws: ``InvalidRegularExpression``.
+    public init(validating str: String) throws {
+        self.init(str)
+        if let error = invalidRegularExpression { throw error }
+    }
+
     private static func compile(_ pattern: String, in expression: String, reason: String, fix: String) -> Storage {
         do {
             let regularExpression = try NSRegularExpression(pattern: pattern)
             return .regularExpression(regularExpression, topLevelGroups: topLevelGroups(of: regularExpression))
         } catch {
-            preconditionFailure("""
-                CucumberExpression: "\(expression)" \(reason), so it is treated as a regular expression, \
-                but it is not valid as one. \(fix)
-                """)
+            return .invalidRegularExpression(InvalidRegularExpression(expression: expression,
+                                                                      pattern: pattern,
+                                                                      problem: problem(with: pattern) ?? error.localizedDescription,
+                                                                      treatedAsRegularExpressionBecause: reason,
+                                                                      fix: fix))
         }
+    }
+
+    /// What is wrong with `pattern`, such as "expected ')'". `NSRegularExpression` only says that the
+    /// value is invalid, so ask Swift's own parser where the platform has one.
+    private static func problem(with pattern: String) -> String? {
+#if compiler(>=5.7) && canImport(_StringProcessing)
+        if #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *) {
+            do {
+                _ = try Regex(pattern)
+            } catch {
+                return "\(error)"
+            }
+        }
+#endif
+        return nil
     }
 
     public func match(in str: String) -> Match? {
         switch storage {
             case .expression(let tokens): return match(in: str, tokens: tokens)
             case .regularExpression(let regularExpression, let groups): return match(in: str, regularExpression: regularExpression, groups: groups)
+            case .invalidRegularExpression(let error): preconditionFailure(error.description)
         }
     }
 

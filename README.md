@@ -12,6 +12,8 @@ A `CucumberExpression` accepts either kind of pattern, and tells them apart the 
 
 In a regular expression, each top-level capture group becomes an anonymous parameter.
 
+If a string is treated as a regular expression but will not compile, creating the expression does not crash. `invalidRegularExpression` says what is wrong, for example `expected ')'`, and `match(in:)` traps if you call it anyway. To handle the error with `try` instead, use `CucumberExpression(validating:)`.
+
 [Check out the docs](https://cucumberswift.org/CucumberSwiftExpressions/documentation/cucumberswiftexpressions/) for more info.
 
 ## Attributions
