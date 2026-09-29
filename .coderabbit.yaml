@@ -29,6 +29,10 @@ reviews:
     enabled: true
     drafts: false
     auto_incremental_review: true
+    # Pull requests into support/* branches and stacked pull requests have a base other than main.
+    # Without this, CodeRabbit only reviews pull requests into the default branch.
+    base_branches:
+      - ".*"
     ignore_usernames:
       - dependabot[bot]
 
