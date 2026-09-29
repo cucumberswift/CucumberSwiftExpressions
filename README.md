@@ -1,11 +1,18 @@
-![Build Status](https://github.com/Tyler-Keith-Thompson/CucumberSwiftExpressions/actions/workflows/CI.yml/badge.svg?branch=main)
-[![Codacy Badge](https://app.codacy.com/project/badge/Grade/c29b0bf4883b4387a41ac1d090773f65)](https://www.codacy.com/gh/Tyler-Keith-Thompson/CucumberSwift/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=Tyler-Keith-Thompson/CucumberSwiftExpressions&amp;utm_campaign=Badge_Grade)
+![Build Status](https://github.com/cucumberswift/CucumberSwiftExpressions/actions/workflows/CI.yml/badge.svg?branch=main)
 
 # CucumberSwiftExpressions
 
-Cucumber supports expressions, a custom alternative to regular expressions. This is a supplemental library for [CucumberSwift](https://github.com/Tyler-Keith-Thompson/CucumberSwift) that can parse these expressions. 
+Cucumber expressions are a simpler alternative to regular expressions for matching step text: `I have {int} cukes` instead of `^I have (-?\d+) cukes$`. This library parses and matches them in Swift. [CucumberSwift](https://github.com/cucumberswift/CucumberSwift) uses it, and it also works as a standalone library.
 
-It is possible to use this as a standalone library for parsing Cucumber expressions with Swift. [Check out our docs](https://tyler-keith-thompson.github.io/CucumberSwiftExpressions/documentation/cucumberswiftexpressions/) for more info.
+A `CucumberExpression` accepts either kind of pattern, and tells them apart the same way Cucumber's reference implementation does:
+
+- A string that starts with `^` or ends with `$` is a regular expression.
+- A string written between slashes, like `/I have (\d+) cukes/`, is a regular expression. The slashes are not part of the pattern.
+- Anything else is a Cucumber expression.
+
+In a regular expression, each top-level capture group becomes an anonymous parameter.
+
+[Check out the docs](https://cucumberswift.org/CucumberSwiftExpressions/documentation/cucumberswiftexpressions/) for more info.
 
 ## Attributions
 Cucumber Expressions grammar and implementation information came from [cucumber-expressions](https://github.com/cucumber/cucumber-expressions). 

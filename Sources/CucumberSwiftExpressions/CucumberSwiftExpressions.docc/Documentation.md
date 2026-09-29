@@ -4,6 +4,12 @@ A cucumber expressions implementation in Swift.
 
 ## Overview
 
-Cucumber supports expressions, a custom alternative to regular expressions. This is a supplemental library for CucumberSwift that can parse these expressions.
+Cucumber expressions are a simpler alternative to regular expressions for matching step text: `I have {int} cukes` instead of `^I have (-?\d+) cukes$`. This library parses and matches them in Swift. CucumberSwift uses it, and it also works as a standalone library.
 
-It is possible to use this as a standalone library for parsing Cucumber expressions with Swift. Check out our docs for more info.
+A `CucumberExpression` accepts either kind of pattern, and tells them apart the same way Cucumber's reference implementation does:
+
+- A string that starts with `^` or ends with `$` is a regular expression.
+- A string written between slashes, like `/I have (\d+) cukes/`, is a regular expression. The slashes are not part of the pattern.
+- Anything else is a Cucumber expression.
+
+In a regular expression, each top-level capture group becomes an anonymous parameter.
