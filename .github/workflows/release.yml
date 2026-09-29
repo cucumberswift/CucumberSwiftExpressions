@@ -36,8 +36,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Version files the release commit updates. A file that does not exist is skipped.
-  PODSPEC: CucumberSwiftExpressions.podspec
   DOCC_TARGET: CucumberSwiftExpressions
   # Where the docs are served on https://cucumberswift.org: this repository's
   # Pages site. DocC bakes this path into its output. Docs built for an earlier
