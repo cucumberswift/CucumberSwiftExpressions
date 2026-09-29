@@ -134,6 +134,107 @@ final class CucumberSwiftExpressionsTests: XCTestCase {
         XCTAssertEqual(try match.allParameters(\.airport).count, 1)
         XCTAssertIdentical(try match.allParameters(\.airport).first, Airport.lax)
     }
+
+    func testAnchoredRegularExpressionMatches() {
+        let expression = CucumberExpression("^some step$")
+        XCTAssertNotNil(expression.match(in: "some step"))
+        XCTAssertNil(expression.match(in: "another step"))
+    }
+
+    func testLeadingAnchorAloneIsARegularExpression() {
+        let expression = CucumberExpression("^some step")
+        XCTAssertNotNil(expression.match(in: "some step"))
+        XCTAssertNil(expression.match(in: "not some step"))
+    }
+
+    func testTrailingAnchorAloneIsARegularExpression() {
+        let expression = CucumberExpression("some step$")
+        XCTAssertNotNil(expression.match(in: "some step"))
+        XCTAssertNil(expression.match(in: "some step, then more"))
+    }
+
+    func testSlashDelimitedStringIsARegularExpression() {
+        let expression = CucumberExpression("/some step/")
+        XCTAssertNotNil(expression.match(in: "some step"))
+        XCTAssertNil(expression.match(in: "another step"))
+    }
+
+    func testRegularExpressionModeReturnsThePatternAsWritten() {
+        XCTAssertEqual(CucumberExpression("^the app is at the Main Menu$").regex, "^the app is at the Main Menu$")
+        XCTAssertEqual(CucumberExpression("some step$").regex, "some step$")
+        XCTAssertEqual(CucumberExpression("/some (step)/").regex, "some (step)")
+    }
+
+    func testCaptureGroupsInARegularExpressionYieldTheCapturedText() throws {
+        let expression = CucumberExpression(#"^I owe (\d+) dollars to (\w+)$"#)
+        let match = try XCTUnwrap(expression.match(in: "I owe 42 dollars to Alice"))
+        XCTAssertEqual(match[\.anonymous, index: 0], "42")
+        XCTAssertEqual(match[\.anonymous, index: 1], "Alice")
+        XCTAssertEqual(try match.allParameters(\.anonymous), ["42", "Alice"])
+    }
+
+    func testOnlyTopLevelCaptureGroupsAreParameters() throws {
+        let match = try XCTUnwrap(CucumberExpression("^((a)|(b))$").match(in: "a"))
+        XCTAssertEqual(try match.allParameters(\.anonymous), ["a"])
+    }
+
+    func testNonCapturingLookaheadAndClassParenthesesAreNotGroups() throws {
+        let match = try XCTUnwrap(CucumberExpression(#"^(?:x)(?=y)y[(]\((\d)\)$"#).match(in: "xy((3)"))
+        XCTAssertEqual(try match.allParameters(\.anonymous), ["3"])
+    }
+
+    func testParenthesesInRegularExpressionCommentsAreNotGroups() throws {
+        let extended = try XCTUnwrap(CucumberExpression("(?x)^((a)) # (\n$").match(in: "a"))
+        XCTAssertEqual(try extended.allParameters(\.anonymous), ["a"])
+        let inline = try XCTUnwrap(CucumberExpression("^(?# ( )((a))$").match(in: "a"))
+        XCTAssertEqual(try inline.allParameters(\.anonymous), ["a"])
+    }
+
+    func testExtendedModeCommentsEndAtAnyLineTerminator() throws {
+        for terminator in ["\n", "\r", "\r\n"] {
+            let match = try XCTUnwrap(CucumberExpression("(?x)^# comment\(terminator)((a))$").match(in: "a"))
+            XCTAssertEqual(try match.allParameters(\.anonymous), ["a"])
+        }
+    }
+
+    func testRegularExpressionSearchesTheStepText() throws {
+        // Like a plain regular expression, a pattern matches part of the step text unless both ends are anchored.
+        XCTAssertNotNil(CucumberExpression("/some step/").match(in: "do some step now"))
+        XCTAssertNotNil(CucumberExpression("^foo").match(in: "foobar"))
+        XCTAssertNotNil(CucumberExpression("foo$").match(in: "xfoo"))
+        XCTAssertNil(CucumberExpression("^foo$").match(in: "foobar"))
+        let match = try XCTUnwrap(CucumberExpression(#"^I have (\d+) cukes"#).match(in: "I have 5 cukes in my belly"))
+        XCTAssertEqual(try match.allParameters(\.anonymous), ["5"])
+    }
+
+    func testExtendedModeEndsWithItsGroup() throws {
+        let scoped = try XCTUnwrap(CucumberExpression("^(?x: a )((b)#)(c)$").match(in: "ab#c"))
+        XCTAssertEqual(try scoped.allParameters(\.anonymous), ["b#", "c"])
+        let persistent = try XCTUnwrap(CucumberExpression("^(?:(?x) a )((b))#(c)$").match(in: "ab#c"))
+        XCTAssertEqual(try persistent.allParameters(\.anonymous), ["b", "c"])
+    }
+
+    func testUnmatchedOptionalCaptureKeepsItsPosition() throws {
+        let match = try XCTUnwrap(CucumberExpression("^(a)?(b)$").match(in: "b"))
+        XCTAssertEqual(try match.allParameters(\.anonymous), ["", "b"])
+        XCTAssertEqual(match[\.anonymous, index: 1], "b")
+    }
+
+    func testSlashesInsideACucumberExpressionAreStillAlternation() {
+        let expression = CucumberExpression("a/b")
+        XCTAssertEqual(expression.regex, "^(?:a|b)$")
+        XCTAssertNotNil(expression.match(in: "b"))
+    }
+
+    func testDollarAnchorMigrationOfCurrencyExpression() throws {
+        // "I owe {int}$" used to treat "$" as a literal; it is now a regular expression and traps.
+        // Dropping the anchor, or writing a deliberate regular expression, are the two ways forward.
+        let withoutAnchor = try XCTUnwrap(CucumberExpression("I owe {int}").match(in: "I owe 5"))
+        XCTAssertEqual(try withoutAnchor.first(\.int), 5)
+
+        let escaped = try XCTUnwrap(CucumberExpression(#"^I owe (\d+)\$"#).match(in: "I owe 5$"))
+        XCTAssertEqual(try escaped.first(\.anonymous), "5")
+    }
 }
 
 // swiftlint:disable:next convenience_type
