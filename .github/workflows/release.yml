@@ -208,8 +208,8 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      # In this checkout only; nothing is committed. $VERSION, because no file in the
-      # package holds the version. docs.yml checks the heading.
+      # In this checkout only; nothing is committed. $VERSION, not the podspec: this
+      # checkout comes before the version commit. docs.yml checks the heading.
       - name: Show the version on the landing page
         run: |
           page="Sources/$DOCC_TARGET/$DOCC_TARGET.docc/Documentation.md"
