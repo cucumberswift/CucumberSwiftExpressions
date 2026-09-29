@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
     s.name             = 'CucumberSwiftExpressions'
-    s.version          = '0.0.10'
+    s.version          = '0.0.11'
     s.summary          = 'A cucumber expressions implementation in Swift.'
 
     s.description      = <<-DESC
