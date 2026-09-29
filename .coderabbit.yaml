@@ -66,14 +66,13 @@ reviews:
 
   path_filters:
     - "!**/Package.resolved"
-    - "!**/Gemfile.lock"
 
   path_instructions:
     - path: "Sources/**/*.swift"
       instructions: >-
         This package parses and matches Cucumber Expressions, and CucumberSwift depends
         on it. Flag behaviour that differs from the Cucumber Expressions specification.
-        The podspec supports iOS 10, macOS 10.12 and tvOS 10. Flag APIs that need a
+        The package supports iOS 10, macOS 10.12 and tvOS 10. Flag APIs that need a
         newer OS without an availability check; regex literals need iOS 16 / macOS 13.
         Flag any change to a public or open symbol, including a new overload that could
         change which existing overload a call resolves to. Flag changes the pull request

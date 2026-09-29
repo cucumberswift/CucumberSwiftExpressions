@@ -1,5 +1,4 @@
 ![Build Status](https://github.com/Tyler-Keith-Thompson/CucumberSwiftExpressions/actions/workflows/CI.yml/badge.svg?branch=main)
-![Pod Platform](https://img.shields.io/cocoapods/p/CucumberSwiftExpressions.svg?style=popout) [![Pod Version](https://img.shields.io/cocoapods/v/CucumberSwiftExpressions.svg?style=popout)](http://cocoapods.org/pods/CucumberSwiftExpressions)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/c29b0bf4883b4387a41ac1d090773f65)](https://www.codacy.com/gh/Tyler-Keith-Thompson/CucumberSwift/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=Tyler-Keith-Thompson/CucumberSwiftExpressions&amp;utm_campaign=Badge_Grade)
 
 # CucumberSwiftExpressions

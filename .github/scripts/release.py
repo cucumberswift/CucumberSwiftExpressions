@@ -340,7 +340,7 @@ def set_version(path, content, version):
     if path.endswith(".plist"):
         pattern = re.compile(r"(<key>CFBundleVersion</key>\s*<string>)[^<]*(</string>)")
     else:
-        pattern = re.compile(r"^(\s*s\.version\s*=\s*['\"])[^'\"]*(['\"])", re.MULTILINE)
+        fail(f"{path} is not a version file the release can change.")
     updated, count = pattern.subn(lambda m: f"{m.group(1)}{version}{m.group(2)}", content)
     if count != 1:
         fail(f"Could not find exactly one version in {path}.")
@@ -371,7 +371,7 @@ def publish():
 
     if commit is None:
         changed = []
-        for path in filter(None, (os.environ.get("PLIST"), os.environ.get("PODSPEC"))):
+        for path in filter(None, (os.environ.get("PLIST"),)):
             found = api(f"repos/{repo}/contents/{path}?ref={sha}", allow=(404,))
             if found is None:
                 continue
