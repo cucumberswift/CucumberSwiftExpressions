@@ -11,9 +11,15 @@ on:
       - 'support/**'
   workflow_dispatch:
 
+# Least privilege: these jobs only read the checkout.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: macos-14
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v2
       - name: Run TESTS
@@ -30,6 +36,8 @@ jobs:
   build_for_package_managers:
     needs: test
     runs-on: macos-14
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v2
       - name: Validate SwiftPM BUILDs
