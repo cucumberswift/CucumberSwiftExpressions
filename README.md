@@ -1,4 +1,5 @@
 ![Build Status](https://github.com/cucumberswift/CucumberSwiftExpressions/actions/workflows/CI.yml/badge.svg?branch=main)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=cucumberswift_CucumberSwiftExpressions&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=cucumberswift_CucumberSwiftExpressions)
 
 # CucumberSwiftExpressions
 
