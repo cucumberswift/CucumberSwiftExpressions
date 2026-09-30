@@ -111,12 +111,26 @@ def call_end(text, index):
     return None
 
 
+PACKAGE_CALL = re.compile(r"\.package\s*\(")
+
+
 def package_calls(text):
-    """Yield the argument text of each `.package(...)` call."""
-    for match in re.finditer(r"\.package\s*\(", text):
+    """Yield the argument text of each `.package(...)` call. A call written inside a
+    string literal is text, not a call, so it is skipped."""
+    index = 0
+    while index < len(text):
+        if STRING_START.match(text, index):
+            index = string_end(text, index)
+            continue
+        match = PACKAGE_CALL.match(text, index)
+        if not match:
+            index += 1
+            continue
         end = call_end(text, match.end())
-        if end is not None:
-            yield text[match.end():end]
+        if end is None:
+            return
+        yield text[match.end():end]
+        index = end + 1
 
 
 def parse_package_swift(text):
@@ -151,11 +165,14 @@ def parse_resolved(text, path):
         for pin in pins:
             url = pin["repositoryURL"] if version == 1 else pin["location"]
             state = pin["state"]
+            if not isinstance(url, str) or not isinstance(state, dict):
+                raise TypeError(f"a pin's URL must be a string and its state an object: {pin}")
             result[identity(url)] = {"url": url, "version": state.get("version"),
                                      "revision": state.get("revision")}
         return result
     except (ValueError, KeyError, TypeError) as error:
-        raise CheckError(f"{path} is not a Package.resolved file this check can read ({error}).")
+        raise CheckError(f"{path} is not a Package.resolved file this check can read ({error}). "
+                         f"Run `swift package resolve` to regenerate it, and commit it.")
 
 
 def check_bounds(dependencies, pins):

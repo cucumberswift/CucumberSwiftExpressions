@@ -198,6 +198,15 @@ class ParsingTests(unittest.TestCase):
                 self.assertEqual(sorted(check_lockfiles.parse_package_swift(text)),
                                  ["swift-docc-plugin"])
 
+    def test_a_call_inside_a_string_is_not_a_dependency(self):
+        for declaration in ['let example = #".package(url: "https://example.com/Bar.git", from: "2.0.0")"#',
+                            'let example = ".package(url: \\"https://example.com/Bar.git\\", from: \\"2.0.0\\")"',
+                            'let example = """\n.package(url: "https://example.com/Foo.git", from: "9.0.0")\n"""']:
+            with self.subTest(declaration):
+                text = declaration + '\n.package(url: "https://example.com/Foo.git", from: "1.0.0")'
+                self.assertEqual(check_lockfiles.parse_package_swift(text),
+                                 {"foo": ("https://example.com/Foo.git", "1.0.0")})
+
     def test_comment_markers_inside_a_string_are_not_comments(self):
         text = 'let x = "/* not a comment"\n.package(url: "https://example.com/Foo.git", from: "1.0.0") // done'
         self.assertEqual(check_lockfiles.parse_package_swift(text),
@@ -229,6 +238,16 @@ class ParsingTests(unittest.TestCase):
         with self.assertRaises(check_lockfiles.CheckError) as raised:
             check_lockfiles.parse_resolved('{"version": 3}', "Some/Package.resolved")
         self.assertIn("Some/Package.resolved is not a Package.resolved file", str(raised.exception))
+        self.assertIn("Run `swift package resolve` to regenerate it", str(raised.exception))
+
+    def test_a_malformed_pin_fails_with_the_lockfile_path(self):
+        pin = {"package": "SwiftDocCPlugin", "repositoryURL": DOCC, "state": {"version": "1.0.0"}}
+        for broken in [{**pin, "state": None}, {**pin, "repositoryURL": None}, None]:
+            with self.subTest(broken):
+                text = json.dumps({"object": {"pins": [broken]}, "version": 1})
+                with self.assertRaises(check_lockfiles.CheckError) as raised:
+                    check_lockfiles.parse_resolved(text, "Package.resolved")
+                self.assertIn("Package.resolved is not a Package.resolved file", str(raised.exception))
 
 
 class MissingFileTests(Repository):
