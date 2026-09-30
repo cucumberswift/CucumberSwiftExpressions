@@ -11,3 +11,7 @@ info.lcov
 fastlane/report.xml
 # Python bytecode, written when the release script tests run
 __pycache__/
+
+# SonarQube Cloud
+.scannerwork/
+sq-generic.xml
