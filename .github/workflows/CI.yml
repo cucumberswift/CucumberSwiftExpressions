@@ -43,6 +43,25 @@ jobs:
       - name: Validate SwiftPM BUILDs
         run: fastlane build_swiftpm
 
+  # Checks that each lower bound in Package.swift is the version Package.resolved
+  # pins, and that `swift package resolve` leaves Package.resolved unchanged. No
+  # path filter, so it runs on every pull request and can be a required check.
+  # The Ubuntu image ships Swift, and resolving needs no Apple toolchain.
+  lockfiles:
+    name: Manifests match their lockfiles
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Show the toolchain
+        run: swift --version
+      - name: Check Package.swift against Package.resolved
+        run: python3 .github/scripts/check_lockfiles.py --resolve
+
   release_script:
     name: Release script tests
     runs-on: ubuntu-24.04
