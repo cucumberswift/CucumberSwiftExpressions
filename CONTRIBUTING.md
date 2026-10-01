@@ -6,5 +6,7 @@ Let's keep this short and sweet. So you want to contribute to CucumberSwift? Coo
 - TEST YOUR CODE! CucumberSwift is primarily black-box tested, that's fine. Feel free to unit test as well, the point is the testing framework really ought to be tested.
 - Submit a Pull Request. At this point you've got everything tested, your new feature or bug fix is in place and you know you'll be near your email for the next few days. Submit your PR and we'll get it turned around and into main ASAP
 
+**Breaking changes need a migration note.** If users have to change something to upgrade, the issue body gets a `## Migration` section that says what to change, with an example. The release notes copy it under the issue's entry, and a release refuses to start while an issue labelled `breaking` has none. Any other issue can have one too, for example when an install channel goes away. Keep it to what users must do; the background belongs in the rest of the issue.
+
 
 I realize this document is somewhat lacking in terms of process, for now I don't care. If we start seeing more contributors I'll think through more how this should work.
