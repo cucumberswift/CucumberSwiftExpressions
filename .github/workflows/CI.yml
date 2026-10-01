@@ -21,15 +21,15 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Run TESTS
         run: swift test -v --enable-code-coverage
       - name: Convert code coverage
         run: xcrun llvm-cov export -format="lcov" -instr-profile=$(find .build -name default.profdata) $(find .build -name CucumberSwiftExpressionsPackageTests) > info.lcov
-      - uses: codecov/codecov-action@v1
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          file: info.lcov
+          files: info.lcov
           # Pull requests from forks have no token, so only a push fails on an upload error.
           fail_ci_if_error: ${{ github.event_name == 'push' }}
 
@@ -39,7 +39,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Validate SwiftPM BUILDs
         run: fastlane build_swiftpm
 
