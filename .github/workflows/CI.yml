@@ -75,3 +75,32 @@ jobs:
           sparse-checkout: .github/scripts
       - name: Run the release script tests
         run: python3 -m unittest discover -s .github/scripts -v
+
+  # Builds the library and runs its tests with Bazel, so BUILD.bazel and
+  # MODULE.bazel cannot drift from Package.swift.
+  bazel:
+    name: Bazel tests
+    runs-on: macos-15
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      # The tests `swift test` runs. Raise it when you add tests.
+      MIN_TESTS: 42
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The runner's `bazel` is Bazelisk, which runs the version in .bazelversion.
+      - name: Show the Bazel version
+        run: bazel version
+      - name: Build the library and run the tests
+        run: bazel test //:CucumberSwiftExpressions //Tests:CucumberSwiftExpressionsTests --test_output=errors
+      - name: Check every test ran
+        run: |
+          n=$(grep -Eo 'Executed [0-9]+ tests' bazel-testlogs/Tests/CucumberSwiftExpressionsTests/test.log | tail -1 | grep -Eo '[0-9]+')
+          echo "CucumberSwiftExpressionsTests: ${n:-0} tests (at least $MIN_TESTS expected)"
+          if [ "${n:-0}" -lt "$MIN_TESTS" ]; then
+            echo "::error::Only ${n:-0} tests ran. If you removed tests on purpose, lower MIN_TESTS in CI.yml."
+            exit 1
+          fi
