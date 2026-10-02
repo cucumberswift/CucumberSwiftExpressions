@@ -61,7 +61,7 @@ class Fake:
         self.runs = []        # every run() call
         self.processes = []   # every subprocess.run() call
         self.local = {SHA}    # commits in the local clone
-        self.archive = None   # (files, commit id) git archive writes; None: the repository's, from the commit
+        self.archive = None   # (entries, commit id) git archive writes; None: the repository's, from the commit
 
     # release.api
     def api(self, path, method="GET", body=None, allow=(), paginate=False, token=None):
@@ -124,17 +124,21 @@ class Fake:
             raise AssertionError(f"unexpected git archive: {fmt} {prefix} {flag}")
         if commit not in self.local:
             raise AssertionError(f"git archive of {commit}, which is not in the local clone")
-        files, comment = self.archive or (ARCHIVE_FILES, commit)
+        entries, comment = self.archive or (ARCHIVE_FILES, commit)
         prefix = prefix[len("--prefix="):]
         with tarfile.open(path, "w:gz", format=tarfile.PAX_FORMAT,
                           pax_headers={"comment": comment} if comment else {}) as archive:
-            for name in [""] + list(files):
-                info = tarfile.TarInfo((prefix + name).rstrip("/") if name else prefix.rstrip("/"))
-                if not name or name.endswith("/"):
+            for entry in [""] + list(entries):
+                # A TarInfo is written as it is, with its full name; a string is a path inside the prefix.
+                if isinstance(entry, tarfile.TarInfo):
+                    archive.addfile(entry)
+                    continue
+                info = tarfile.TarInfo((prefix + entry).rstrip("/"))
+                if not entry or entry.endswith("/"):
                     info.type = tarfile.DIRTYPE
                     archive.addfile(info)
                 else:
-                    data = name.encode()
+                    data = entry.encode()
                     info.size = len(data)
                     archive.addfile(info, io.BytesIO(data))
         return ""
@@ -960,6 +964,13 @@ ARCHIVE_FILES = ("BUILD.bazel", "MODULE.bazel", "REPO.bazel", "Tests/", "Tests/M
 ARCHIVE = "CucumberSwift-5.0.11.tar.gz"
 
 
+def member(name, kind=tarfile.REGTYPE, target=""):
+    """An archive entry with its full name, for Fake.git_archive."""
+    info = tarfile.TarInfo(name)
+    info.type, info.linkname = kind, target
+    return info
+
+
 def encoded(text):
     return {"content": base64.b64encode(text.encode("utf-8")).decode()}
 
@@ -1056,11 +1067,21 @@ class PublishTests(ReleaseTestCase):
         self.assertIn("strip_prefix CucumberSwiftExpressions-5.0.11.", self.read(self.summary))
 
     def test_a_bad_archive_stops_the_run_before_the_tag(self):
+        prefix = "CucumberSwift-5.0.11/"
+        outside = f"{ARCHIVE} has files outside {prefix}."
+        missing = f"{ARCHIVE} is missing REPO.bazel, Tests/, or has them as another kind of file."
+        without = tuple(f for f in ARCHIVE_FILES if f not in ("REPO.bazel", "Tests/", "Tests/MODULE.bazel"))
         for files, comment, error in (
                 (ARCHIVE_FILES, "b" * 40, f"{ARCHIVE} was not built from {COMMIT}."),
                 (ARCHIVE_FILES, None, f"{ARCHIVE} was not built from {COMMIT}."),
-                (("BUILD.bazel", "MODULE.bazel"), COMMIT, f"{ARCHIVE} is missing REPO.bazel, Tests/."),
-                (ARCHIVE_FILES + ("../escape",), COMMIT, f"{ARCHIVE} has files outside CucumberSwift-5.0.11/.")):
+                (without, COMMIT, missing),
+                (without + (member(prefix + "REPO.bazel", tarfile.SYMTYPE, "BUILD.bazel"),
+                            member(prefix + "Tests", tarfile.SYMTYPE, "Sources")), COMMIT, missing),
+                (without + ("REPO.bazel/", "Tests"), COMMIT, missing),
+                (ARCHIVE_FILES + ("../escape",), COMMIT, outside),
+                (ARCHIVE_FILES + (member("/etc/escape"),), COMMIT, outside),
+                (ARCHIVE_FILES + (member("CucumberSwift-5.0.12/BUILD.bazel"),), COMMIT, outside),
+                (ARCHIVE_FILES + (member("CucumberSwift-5.0.11x/BUILD.bazel"),), COMMIT, outside)):
             with self.subTest(error=error, files=files):
                 self.fake.calls.clear()
                 self.fake.processes.clear()

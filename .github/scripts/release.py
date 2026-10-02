@@ -476,14 +476,20 @@ def source_archive(repo, version, commit):
     # git archive records the commit in the global pax header, as git get-tar-commit-id reads it.
     with tarfile.open(path, "r:gz") as archive:
         built_from = archive.pax_headers.get("comment")
-        names = set(archive.getnames())
+        members = {member.name: member for member in archive.getmembers()}
     if built_from != commit:
         fail(f"{path} was not built from {commit}.")
-    if any(n.split("/")[0] != name or ".." in n.split("/") for n in names):
+    if any(n.split("/")[0] != name or ".." in n.split("/") for n in members):
         fail(f"{path} has files outside {name}/.")
-    missing = [p for p in os.environ.get("ARCHIVE_REQUIRES", "").split() if f"{name}/{p.rstrip('/')}" not in names]
+
+    # A path ending in / must be a directory, any other a regular file. A symlink does not count.
+    def usable(required):
+        member = members.get(f"{name}/{required.rstrip('/')}")
+        return member is not None and (member.isdir() if required.endswith("/") else member.isfile())
+
+    missing = [p for p in os.environ.get("ARCHIVE_REQUIRES", "").split() if not usable(p)]
     if missing:
-        fail(f"{path} is missing {', '.join(missing)}.")
+        fail(f"{path} is missing {', '.join(missing)}, or has them as another kind of file.")
     with open(path, "rb") as handle:
         digest = hashlib.sha256(handle.read()).digest()
     append("GITHUB_STEP_SUMMARY", f"Source archive {path}: integrity sha256-{base64.b64encode(digest).decode()}, "
