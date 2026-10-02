@@ -34,6 +34,8 @@ targets: [
 
 CucumberSwiftExpressions is a Bazel module named `cucumberswift_expressions`. Add it to your `MODULE.bazel`, with the latest version from the [Bazel Central Registry](https://registry.bazel.build/modules/cucumberswift_expressions) in place of `X.Y.Z`:
 
+> Note: CucumberSwiftExpressions is not on the Bazel Central Registry yet. The first version published there will be the first release that includes the Bazel files, and this section applies from then on.
+
 ```starlark
 bazel_dep(name = "cucumberswift_expressions", version = "X.Y.Z")
 ```
