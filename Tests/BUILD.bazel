@@ -1,14 +1,14 @@
 load("@rules_apple//apple:macos.bzl", "macos_unit_test")
 load("@rules_swift//swift:swift_library.bzl", "swift_library")
 
-# Runs CucumberSwiftExpressionsTests with Bazel: `bazel test //Tests:CucumberSwiftExpressionsTests`.
+# From this folder: `bazel test //:CucumberSwiftExpressionsTests`.
 
 swift_library(
     name = "CucumberSwiftExpressionsTestsLib",
     testonly = True,
     srcs = glob(["CucumberSwiftExpressionsTests/**/*.swift"]),
     module_name = "CucumberSwiftExpressionsTests",
-    deps = ["//:CucumberSwiftExpressions"],
+    deps = ["@cucumberswift_expressions//:CucumberSwiftExpressions"],
 )
 
 macos_unit_test(

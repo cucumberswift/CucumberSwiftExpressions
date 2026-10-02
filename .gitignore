@@ -16,4 +16,5 @@ __pycache__/
 # Bazel's output symlinks. MODULE.bazel.lock is not committed: this package is a
 # library, and a lockfile only applies when the module is the root of a build.
 /bazel-*
+/Tests/bazel-*
 MODULE.bazel.lock

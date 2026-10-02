@@ -1,0 +1,12 @@
+# Runs CucumberSwiftExpressionsTests against cucumberswift_expressions as a
+# dependency, the way a Bazel project uses it. Run Bazel from this folder.
+module(name = "cucumberswift_expressions_tests")
+
+bazel_dep(name = "apple_support", version = "2.9.1")
+bazel_dep(name = "rules_swift", version = "4.1.2")
+bazel_dep(name = "rules_apple", version = "5.2.0")
+bazel_dep(name = "cucumberswift_expressions")
+local_path_override(
+    module_name = "cucumberswift_expressions",
+    path = "..",
+)

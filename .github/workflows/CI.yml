@@ -94,11 +94,16 @@ jobs:
       # The runner's `bazel` is Bazelisk, which runs the version in .bazelversion.
       - name: Show the Bazel version
         run: bazel version
-      - name: Build the library and run the tests
-        run: bazel test //:CucumberSwiftExpressions //Tests:CucumberSwiftExpressionsTests --test_output=errors
+      - name: Build every target in the module
+        run: bazel build //...
+      # Tests/ is its own module, which depends on this one as a Bazel project would.
+      - name: Run the tests through the module as a dependency
+        working-directory: Tests
+        run: bazel test //:CucumberSwiftExpressionsTests --test_output=errors
       - name: Check every test ran
+        working-directory: Tests
         run: |
-          n=$(grep -Eo 'Executed [0-9]+ tests' bazel-testlogs/Tests/CucumberSwiftExpressionsTests/test.log | tail -1 | grep -Eo '[0-9]+')
+          n=$(grep -Eo 'Executed [0-9]+ tests' bazel-testlogs/CucumberSwiftExpressionsTests/test.log | tail -1 | grep -Eo '[0-9]+')
           echo "CucumberSwiftExpressionsTests: ${n:-0} tests (at least $MIN_TESTS expected)"
           if [ "${n:-0}" -lt "$MIN_TESTS" ]; then
             echo "::error::Only ${n:-0} tests ran. If you removed tests on purpose, lower MIN_TESTS in CI.yml."
