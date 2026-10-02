@@ -75,3 +75,63 @@ jobs:
           sparse-checkout: .github/scripts
       - name: Run the release script tests
         run: python3 -m unittest discover -s .github/scripts -v
+
+  # Checks the Bazel module the way a Bazel project uses it, so BUILD.bazel and
+  # MODULE.bazel cannot drift from Package.swift or break for consumers:
+  # - against a `git archive` of the commit, which is what the release's source
+  #   archive (and so the Bazel Central Registry entry) contains, not the checkout;
+  # - from Tests/, a separate module that depends on this one;
+  # - on every Bazel major that MODULE.bazel's bazel_compatibility allows, and
+  #   on macOS and an iOS simulator, at the lowest OS versions consumers use.
+  bazel:
+    name: Bazel tests (${{ matrix.label }})
+    runs-on: macos-15
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      # The labels are the check names, which rulesets require, so they hold no
+      # version number. An empty version means Bazelisk runs .bazelversion.
+      matrix:
+        include:
+          - label: pinned Bazel
+            bazel: ''
+          # The oldest major that bazel_compatibility in MODULE.bazel allows.
+          - label: oldest Bazel
+            bazel: '8.x'
+    env:
+      # The runner's `bazel` is Bazelisk, which runs this version, or .bazelversion.
+      USE_BAZEL_VERSION: ${{ matrix.bazel }}
+      # The tests `swift test` runs, on each platform. Raise it when you add tests.
+      MIN_TESTS: 42
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Show the Bazel version
+        run: bazel version
+      - name: Unpack the commit as the release archive will contain it
+        run: |
+          mkdir "$RUNNER_TEMP/module"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/module"
+          echo "MODULE_PATH=$RUNNER_TEMP/module" >> "$GITHUB_ENV"
+      - name: Build every target in the module, as a consumer would
+        working-directory: Tests
+        run: bazel build @cucumberswift_expressions//... --override_module=cucumberswift_expressions="$MODULE_PATH"
+      - name: Run the tests on macOS and on an iOS simulator
+        working-directory: Tests
+        run: bazel test //... --override_module=cucumberswift_expressions="$MODULE_PATH" --test_output=errors
+      - name: Check every test ran
+        working-directory: Tests
+        run: |
+          status=0
+          for t in CucumberSwiftExpressionsTests CucumberSwiftExpressionsTests_iOS; do
+            n=$(grep -Eo 'Executed [0-9]+ tests' "bazel-testlogs/$t/test.log" | tail -1 | grep -Eo '[0-9]+')
+            echo "$t: ${n:-0} tests (at least $MIN_TESTS expected)"
+            if [ "${n:-0}" -lt "$MIN_TESTS" ]; then
+              echo "::error::Only ${n:-0} tests ran in $t. If you removed tests on purpose, lower MIN_TESTS in CI.yml."
+              status=1
+            fi
+          done
+          exit $status
