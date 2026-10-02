@@ -1,7 +1,8 @@
+load("@rules_apple//apple:ios.bzl", "ios_unit_test")
 load("@rules_apple//apple:macos.bzl", "macos_unit_test")
 load("@rules_swift//swift:swift_library.bzl", "swift_library")
 
-# From this folder: `bazel test //:CucumberSwiftExpressionsTests`.
+# From this folder: `bazel test //...` runs the tests on macOS and on an iOS simulator.
 
 swift_library(
     name = "CucumberSwiftExpressionsTestsLib",
@@ -11,9 +12,17 @@ swift_library(
     deps = ["@cucumberswift_expressions//:CucumberSwiftExpressions"],
 )
 
+# The minimum OS versions are the lowest that CucumberSwift supports, so the library is
+# compiled for them too, and an API that is too new fails here rather than for a consumer.
+# Xcode's XCTest is built for newer versions, so the linker warns about it; that is expected.
 macos_unit_test(
     name = "CucumberSwiftExpressionsTests",
-    # The test bundle only. Xcode's XCTest is built for macOS 14, so an older value only adds linker warnings.
-    minimum_os_version = "14.0",
+    minimum_os_version = "10.15",
+    deps = [":CucumberSwiftExpressionsTestsLib"],
+)
+
+ios_unit_test(
+    name = "CucumberSwiftExpressionsTests_iOS",
+    minimum_os_version = "13.0",
     deps = [":CucumberSwiftExpressionsTestsLib"],
 )
