@@ -16,6 +16,8 @@ In a regular expression, each top-level capture group becomes an anonymous param
 
 If a string is treated as a regular expression but will not compile, creating the expression does not crash. ``CucumberExpression/invalidRegularExpression`` says what is wrong, for example `expected ')'`, and ``CucumberExpression/match(in:)`` traps if you call it anyway. To handle the error with `try` instead, use ``CucumberExpression/init(validating:)``.
 
+To check an expression without matching any text, for example while a step definition compiles, use ``CucumberExpression/Syntax/init(parsing:)``. It lists the arguments a match passes, in order, each with its parameter name and its range in the string. A Cucumber expression that does not follow the specification, such as `I have {int cukes`, throws a ``CucumberExpression/SyntaxError`` with cucumber-jvm's message and the range of the problem. A parameter name that is not built in is an argument, not an error, because custom parameters are registered at run time. ``CucumberExpression/init(_:)`` itself stays lenient.
+
 ## Installation
 
 ### Swift Package Manager
