@@ -14,6 +14,8 @@ import Foundation
 ///
 /// Positions are offsets into the expression, counted in characters.
 struct SyntaxParser {
+    private typealias Result = (consumed: Int, nodes: [Node])
+
     private enum TokenKind: Equatable {
         case startOfLine, endOfLine, whitespace, beginOptional, endOptional, beginParameter, endParameter,
              alternation, text
@@ -43,8 +45,6 @@ struct SyntaxParser {
             kind == .text ? token : children.map(\.text).joined()
         }
     }
-
-    private typealias Result = (consumed: Int, nodes: [Node])
 
     private enum Rule {
         case text, name, parameter, optional, alternativeSeparator, alternation, expression
@@ -91,11 +91,11 @@ struct SyntaxParser {
             if character == .escapeCharacter {
                 guard index + 1 < characters.count else { throw error(.escapedEndOfLine, index, index + 1) }
                 character = characters[index + 1]
-                guard Self.canEscape(character) else { throw error(.cannotEscape, index + 1, index + 2) }
+                guard canEscape(character) else { throw error(.cannotEscape, index + 1, index + 2) }
                 kind = .text
                 index += 2
             } else {
-                kind = Self.kind(of: character)
+                kind = tokenKind(of: character)
                 index += 1
             }
             // Runs of text and of whitespace are one token each; every other token is one character.
@@ -113,12 +113,12 @@ struct SyntaxParser {
         return tokens
     }
 
-    private static func canEscape(_ character: Character) -> Bool {
+    private func canEscape(_ character: Character) -> Bool {
         // Whitespace, `{`, `}`, `(`, `)`, `/` and `\`.
-        kind(of: character) != .text || character == .escapeCharacter
+        tokenKind(of: character) != .text || character == .escapeCharacter
     }
 
-    private static func kind(of character: Character) -> TokenKind {
+    private func tokenKind(of character: Character) -> TokenKind {
         switch character {
             case _ where character.isWhitespace: return .whitespace
             case .leadingOptionalBoundary: return .beginOptional
@@ -164,7 +164,7 @@ struct SyntaxParser {
                 // option := optional | parameter | text
                 return try parseBetween(.optional, .beginOptional, .endOptional, Self.optionRules, tokens, at: current)
             case .alternativeSeparator:
-                guard Self.lookingAt(tokens, current, .alternation) else { return (0, []) }
+                guard lookingAt(tokens, current, .alternation) else { return (0, []) }
                 let token = tokens[current]
                 return (1, [Node(kind: .alternative, start: token.start, end: token.end, token: token.text)])
             case .alternation:
@@ -180,14 +180,14 @@ struct SyntaxParser {
     /// right-boundary := whitespace | { | $
     /// alternative: = optional | parameter | text
     private func parseAlternation(_ tokens: [Token], at current: Int) throws -> Result {
-        guard Self.lookingAt(tokens, current - 1, .startOfLine, .whitespace, .endParameter) else { return (0, []) }
+        guard lookingAt(tokens, current - 1, .startOfLine, .whitespace, .endParameter) else { return (0, []) }
         let rightBoundaries: [TokenKind] = [.whitespace, .endOfLine, .beginParameter]
         let result = try parseTokens(until: rightBoundaries, with: Self.alternativeRules, tokens, at: current)
         guard result.nodes.contains(where: { $0.kind == .alternative }) else { return (0, []) }
         let start = tokens[current].start
         // The right-hand boundary is not consumed.
         let end = tokens[current + result.consumed].start
-        let alternatives = Self.splitAlternatives(start, end, result.nodes)
+        let alternatives = splitAlternatives(start, end, result.nodes)
         return (result.consumed, [Node(kind: .alternation, start: start, end: end, children: alternatives)])
     }
 
@@ -197,10 +197,10 @@ struct SyntaxParser {
                               _ rules: [Rule],
                               _ tokens: [Token],
                               at current: Int) throws -> Result {
-        guard Self.lookingAt(tokens, current, begin) else { return (0, []) }
+        guard lookingAt(tokens, current, begin) else { return (0, []) }
         let result = try parseTokens(until: [end, .endOfLine], with: rules, tokens, at: current + 1)
         let last = current + 1 + result.consumed
-        guard Self.lookingAt(tokens, last, end) else {
+        guard lookingAt(tokens, last, end) else {
             let problem: CucumberExpression.SyntaxError.Problem = begin == .beginParameter ? .missingClosingBrace
                                                                                             : .missingClosingParenthesis
             throw error(problem, tokens[current].start, tokens[current].end)
@@ -215,7 +215,7 @@ struct SyntaxParser {
                              at start: Int) throws -> Result {
         var current = start
         var nodes = [Node]()
-        while current < tokens.count, !endKinds.contains(where: { Self.lookingAt(tokens, current, $0) }) {
+        while current < tokens.count, !endKinds.contains(where: { lookingAt(tokens, current, $0) }) {
             var result: Result = (0, [])
             for rule in rules {
                 result = try parse(rule, tokens, at: current)
@@ -229,7 +229,7 @@ struct SyntaxParser {
         return (current - start, nodes)
     }
 
-    private static func lookingAt(_ tokens: [Token], _ index: Int, _ kinds: TokenKind...) -> Bool {
+    private func lookingAt(_ tokens: [Token], _ index: Int, _ kinds: TokenKind...) -> Bool {
         let kind: TokenKind
         if index < 0 {
             kind = .startOfLine
@@ -242,7 +242,7 @@ struct SyntaxParser {
     }
 
     /// Groups the nodes of an alternation into one alternative node per side of each `/`.
-    private static func splitAlternatives(_ start: Int, _ end: Int, _ nodes: [Node]) -> [Node] {
+    private func splitAlternatives(_ start: Int, _ end: Int, _ nodes: [Node]) -> [Node] {
         var separators = [Node]()
         var alternatives = [[Node]()]
         for node in nodes {
