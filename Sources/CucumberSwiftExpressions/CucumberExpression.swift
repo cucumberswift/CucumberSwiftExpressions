@@ -11,7 +11,7 @@ import Foundation
 public struct CucumberExpression: ExpressibleByStringLiteral {
     private enum Storage {
         case expression([Lexer.Token])
-        case regularExpression(NSRegularExpression, topLevelGroups: [Int])
+        case regularExpression(NSRegularExpression, topLevelGroups: [CaptureGroup])
         case invalidRegularExpression(InvalidRegularExpression)
     }
 
@@ -76,7 +76,7 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
         if str.first == "^" || str.last == "$" {
             storage = Self.compile(str, in: str, reason: "starts with ^ or ends with $",
                                    fix: "Remove the anchors, or write a valid regular expression.")
-        } else if str.count >= 2, str.first == "/", str.last == "/" {
+        } else if Self.isBetweenSlashes(str) {
             let pattern = String(str.dropFirst().dropLast())
             storage = Self.compile(pattern, in: str, reason: "is written between slashes",
                                    fix: "Remove the slashes, or write a valid regular expression.")
@@ -132,10 +132,10 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
     /// Every top-level capture group becomes an anonymous parameter, so its text is available through
     /// `\.anonymous`. As upstream, groups nested inside another group are not arguments, and a group
     /// that did not take part in the match keeps its position with empty text.
-    private func match(in str: String, regularExpression: NSRegularExpression, groups: [Int]) -> Match? {
+    private func match(in str: String, regularExpression: NSRegularExpression, groups: [CaptureGroup]) -> Match? {
         guard let result = regularExpression.firstMatch(in: str, range: NSRange(str.startIndex..., in: str)) else { return nil }
         let match = Match()
-        for group in groups where group < result.numberOfRanges {
+        for group in groups.lazy.map(\.number) where group < result.numberOfRanges {
             let text = Range(result.range(at: group), in: str).map { String(str[$0]) } ?? ""
             match.append(.parameter(Position(line: 0, column: UInt(group)), AnonymousParameter.name),
                          matchedText: text)
@@ -193,13 +193,14 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
         }
     }
 
-    /// The numbers of the capture groups that are not nested inside another capture group.
-    private static func topLevelGroups(of regularExpression: NSRegularExpression) -> [Int] {
+    /// The capture groups that are not nested inside another capture group.
+    private static func topLevelGroups(of regularExpression: NSRegularExpression) -> [CaptureGroup] {
         var scanner = GroupScanner(Array(regularExpression.pattern))
         scanner.scan()
         // If this scan ever disagrees with ICU, expose every group rather than guess.
         let total = regularExpression.numberOfCaptureGroups
-        return scanner.count == total ? scanner.topLevel : Array(stride(from: 1, through: total, by: 1))
+        return scanner.count == total ? scanner.topLevel
+                                      : stride(from: 1, through: total, by: 1).map { CaptureGroup(number: $0) }
     }
 
     /// Walks an ICU pattern and records which capture groups are not nested inside another one.
@@ -207,8 +208,9 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
         let characters: [Character]
         var index = 0
         var count = 0
-        var topLevel = [Int]()
-        private var open = [(isCapture: Bool, extendedBefore: Bool)]() // one entry per open parenthesis
+        var topLevel = [CaptureGroup]()
+        // One entry per open parenthesis. `topLevelIndex` is the group's place in `topLevel`, if it has one.
+        private var open = [(isCapture: Bool, extendedBefore: Bool, topLevelIndex: Int?)]()
         private var classDepth = 0
         private var extended = false // `(?x)`: `#` starts a comment that runs to the end of the line
 
@@ -264,7 +266,11 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
 
         private mutating func closeGroup() {
             // Flags set inside a group, such as `(?x:`, end with it.
-            if let group = open.popLast() { extended = group.extendedBefore }
+            guard let group = open.popLast() else { return }
+            extended = group.extendedBefore
+            if let topLevelIndex = group.topLevelIndex, let start = topLevel[topLevelIndex].characters?.lowerBound {
+                topLevel[topLevelIndex].characters = start..<(index + 1)
+            }
         }
 
         private mutating func openGroup() {
@@ -279,12 +285,16 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
                 isCapture = peek(2) == "<" && peek(3) != "=" && peek(3) != "!"
                 isFlagOnlyGroup = enableExtendedModeIfFlagged()
             }
+            var topLevelIndex: Int?
             if isCapture {
                 count += 1
-                if !open.contains(where: \.isCapture) { topLevel.append(count) }
+                if !open.contains(where: \.isCapture) {
+                    topLevelIndex = topLevel.count
+                    topLevel.append(CaptureGroup(number: count, characters: index..<(index + 1)))
+                }
             }
             // `(?x)` has no body of its own: it changes the mode for the rest of the enclosing group.
-            open.append((isCapture, isFlagOnlyGroup ? extended : extendedBefore))
+            open.append((isCapture, isFlagOnlyGroup ? extended : extendedBefore, topLevelIndex))
         }
 
         /// Recognises `(?x)`, `(?ix)`, `(?x-i:` and similar flag groups, and says whether it was `(?flags)` alone.
@@ -298,6 +308,27 @@ public struct CucumberExpression: ExpressibleByStringLiteral {
             }
             return peek(offset) == ")"
         }
+    }
+}
+
+extension CucumberExpression {
+    /// A capture group that is not nested inside another capture group.
+    struct CaptureGroup: Equatable {
+        /// The group's number, as `NSTextCheckingResult.range(at:)` counts them.
+        let number: Int
+        /// Where the group is written in the pattern, from its `(` to its `)`, counted in characters.
+        /// `nil` when the scanner could not place it.
+        var characters: Range<Int>?
+    }
+
+    /// The top-level capture groups of a regular expression, in order. `nil` for a Cucumber expression.
+    var captureGroups: [CaptureGroup]? {
+        guard case .regularExpression(_, let groups) = storage else { return nil }
+        return groups
+    }
+
+    static func isBetweenSlashes(_ str: String) -> Bool {
+        str.count >= 2 && str.first == "/" && str.last == "/"
     }
 }
 
