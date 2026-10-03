@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: macos-14
+    runs-on: macos-15
     permissions:
       contents: read
     steps:
@@ -35,7 +35,7 @@ jobs:
 
   build_for_package_managers:
     needs: test
-    runs-on: macos-14
+    runs-on: macos-15
     permissions:
       contents: read
     steps:
