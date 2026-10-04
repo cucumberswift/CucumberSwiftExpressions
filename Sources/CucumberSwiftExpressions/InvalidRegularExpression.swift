@@ -24,7 +24,13 @@ public struct InvalidRegularExpression: Error, Equatable, CustomStringConvertibl
     public var description: String {
         """
         CucumberExpression: "\(expression)" \(treatedAsRegularExpressionBecause), so it is treated as a \
-        regular expression, but it is not valid as one: \(problem). \(fix)
+        regular expression, but it is not valid as one: \(problemSentence) \(fix)
         """
+    }
+
+    /// ``problem`` ending with one full stop: Foundation's description already has one, and Swift's
+    /// parser's does not.
+    private var problemSentence: String {
+        problem.hasSuffix(".") ? problem : problem + "."
     }
 }
