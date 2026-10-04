@@ -285,6 +285,16 @@ final class CucumberSwiftExpressionsTests: XCTestCase {
 
         XCTAssert(error.problem.hasPrefix("The value"), error.problem)
     }
+
+    func testAProblemFromSwiftsParserIsFollowedByOneFullStop() throws {
+        guard #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *) else {
+            throw XCTSkip("Swift's regular expression parser needs iOS 16, macOS 13, tvOS 16 or watchOS 9")
+        }
+        let error = try XCTUnwrap(CucumberExpression("^a broken (step runs$").invalidRegularExpression)
+
+        XCTAssert(error.description.hasSuffix("not valid as one: expected ')'. Remove the anchors, or write a valid regular expression."),
+                  error.description)
+    }
 #else
     func testWithoutSwiftsParserTheProblemIsFoundationsDescription() throws {
         let error = try XCTUnwrap(CucumberExpression("^a broken (step runs$").invalidRegularExpression)
@@ -292,6 +302,16 @@ final class CucumberSwiftExpressionsTests: XCTestCase {
         XCTAssert(error.problem.hasPrefix("The value"), error.problem)
     }
 #endif
+
+    func testAProblemFromFoundationIsFollowedByOneFullStop() throws {
+        // Swift's parser reads {int} as literal text and accepts the pattern, so on every platform the
+        // problem is Foundation's description, which ends with a full stop of its own.
+        let error = try XCTUnwrap(CucumberExpression("the basket holds {int} cukes$").invalidRegularExpression)
+        XCTAssert(error.problem.hasSuffix("."), error.problem)
+
+        XCTAssert(error.description.hasSuffix("\(error.problem) Remove the anchors, or write a valid regular expression."),
+                  error.description)
+    }
 
     func testValidatingInitializerThrowsForAnInvalidRegularExpression() {
         XCTAssertThrowsError(try CucumberExpression(validating: "^a broken (step runs$")) { error in
