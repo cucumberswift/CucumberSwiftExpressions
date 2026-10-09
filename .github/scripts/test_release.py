@@ -975,6 +975,55 @@ def encoded(text):
     return {"content": base64.b64encode(text.encode("utf-8")).decode()}
 
 
+def archive_section(path=ARCHIVE, repo=REPO, version="5.0.11"):
+    """The source archive's section of the summary, for the archive at `path` as it is on disk."""
+    with open(path, "rb") as handle:
+        digest = base64.b64encode(hashlib.sha256(handle.read()).digest()).decode()
+    return (f"\n### Source archive\n\n- Name: `{path}`\n"
+            f"- URL: https://github.com/{repo}/releases/download/{version}/{path}\n"
+            f"- Integrity: `sha256-{digest}`\n- Strip prefix: `{path[:-len('.tar.gz')]}`\n")
+
+
+class DryRunTests(PlanTestCase):
+    """A dry run's plan builds and checks the source archive, and uploads nothing."""
+
+    def setUp(self):
+        super().setUp()
+        os.environ.update(DRY_RUN="true", ARCHIVE_REQUIRES="MODULE.bazel BUILD.bazel REPO.bazel Tests/")
+
+    def archives(self):
+        return [r for r in self.fake.runs if r[:2] == ("git", "archive")]
+
+    def test_a_dry_run_builds_the_archive_from_the_release_commit(self):
+        self.plan("patch")
+        self.assertEqual(self.archives(), [("git", "archive", "--format=tar.gz", "--prefix=CucumberSwift-5.0.11/",
+                                            "-o", ARCHIVE, SHA)])
+        self.assertFalse([r for r in self.fake.runs if r[:2] == ("git", "fetch")])
+        self.assertTrue(self.read(self.summary).endswith(
+            archive_section() + f"\nDry run: built from `{SHA}` and not uploaded. A release that makes a version "
+                                "commit builds the archive from that commit, so its integrity differs.\n"))
+
+    def test_a_dry_run_uploads_and_writes_nothing(self):
+        self.plan("patch")
+        self.assertEqual([c for c in self.fake.calls if c[0] != "GET"], [])
+        self.assertEqual(self.fake.processes, [])
+
+    def test_a_bad_archive_fails_the_dry_run(self):
+        self.fake.archive = (("BUILD.bazel", "MODULE.bazel"), SHA)
+        self.assertEqual(self.plan_fails("patch"),
+                         f"{ARCHIVE} is missing REPO.bazel, Tests/, or has them as another kind of file.")
+
+    def test_a_real_run_builds_no_archive_when_it_plans(self):
+        for value in ("false", None):
+            with self.subTest(DRY_RUN=value):
+                os.environ.pop("DRY_RUN", None)
+                if value:
+                    os.environ["DRY_RUN"] = value
+                self.plan("patch")
+                self.assertEqual(self.archives(), [])
+                self.assertNotIn("Source archive", self.read(self.summary))
+
+
 class PublishTests(ReleaseTestCase):
     def setUp(self):
         super().setUp()
@@ -1029,13 +1078,8 @@ class PublishTests(ReleaseTestCase):
         self.assertEqual(self.fake.processes, [[
             "gh", "release", "create", "5.0.11", "--verify-tag", "--title", "Release 5.0.11",
             "--notes-file", "notes.md", "--latest=true", "docs-major.zip", "docs-root.zip", ARCHIVE]])
-        self.assertEqual(self.read(self.summary), self.archive_summary() + f"Released 5.0.11 at {COMMIT}.\n")
+        self.assertEqual(self.read(self.summary), f"Released 5.0.11 at {COMMIT}.\n" + archive_section())
         self.assertEqual(out, "")
-
-    def archive_summary(self):
-        with open(ARCHIVE, "rb") as handle:
-            digest = base64.b64encode(hashlib.sha256(handle.read()).digest()).decode()
-        return f"Source archive {ARCHIVE}: integrity sha256-{digest}, strip_prefix CucumberSwift-5.0.11.\n"
 
     def archives(self):
         return [r for r in self.fake.runs if r[:2] == ("git", "archive")]
@@ -1064,7 +1108,9 @@ class PublishTests(ReleaseTestCase):
         self.call(release.publish)
         self.assertEqual(self.archives()[0][3], "--prefix=CucumberSwiftExpressions-5.0.11/")
         self.assertEqual(self.fake.processes[0][-1], "CucumberSwiftExpressions-5.0.11.tar.gz")
-        self.assertIn("strip_prefix CucumberSwiftExpressions-5.0.11.", self.read(self.summary))
+        self.assertIn("- Strip prefix: `CucumberSwiftExpressions-5.0.11`\n", self.read(self.summary))
+        self.assertIn(f"- URL: https://github.com/{OTHER_REPO}/releases/download/5.0.11/"
+                      "CucumberSwiftExpressions-5.0.11.tar.gz\n", self.read(self.summary))
 
     def test_a_bad_archive_stops_the_run_before_the_tag(self):
         prefix = "CucumberSwift-5.0.11/"
@@ -1152,7 +1198,7 @@ class PublishTests(ReleaseTestCase):
         self.assertEqual(out, f"Reusing the version commit {COMMIT} from an earlier attempt.\n"
                               "Reusing the tag 5.0.11 from an earlier attempt.\n"
                               "The release 5.0.11 already exists. Nothing to do.\n")
-        self.assertEqual(self.read(self.summary), self.archive_summary() + f"Released 5.0.11 at {COMMIT}.\n")
+        self.assertEqual(self.read(self.summary), f"Released 5.0.11 at {COMMIT}.\n" + archive_section())
 
     def test_a_rerun_after_the_commit_creates_the_tag_and_the_release(self):
         self.earlier_attempt()
