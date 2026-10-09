@@ -8,7 +8,11 @@ name: Release
 # it, runs the tests, commits the version files, and only then creates the tag
 # and the release. Nothing is public until every check has passed. The release
 # carries the docs and a source archive, CucumberSwiftExpressions-X.Y.Z.tar.gz,
-# built with git archive from the tagged commit, for Bazel registry entries.
+# built with git archive from the tagged commit. A Bazel registry entry pins the
+# archive's integrity value, which the run's summary shows, and GitHub doesn't
+# guarantee its generated tag archives (/archive/refs/tags/...) stay byte-for-byte
+# the same; a release's assets never change. A dry run builds and checks the
+# archive, and uploads nothing.
 #
 # The version commit, the tag and the release are written with a short-lived
 # token from the organization's release GitHub App. Its private key is a secret
@@ -25,7 +29,7 @@ on:
         type: choice
         options: [patch, minor, major]
       dry_run:
-        description: Only compute and check the version, and show the release notes
+        description: Only compute and check the version and the source archive, and show the release notes
         type: boolean
         default: false
 
@@ -45,6 +49,9 @@ env:
   DOCS_PATH: CucumberSwiftExpressions
   # The commit this run releases, fixed when the run starts.
   RELEASE_SHA: ${{ github.sha }}
+  # What the source archive must contain: the Swift package, and the Bazel module
+  # that registry entries build.
+  ARCHIVE_REQUIRES: Package.swift Sources/ MODULE.bazel BUILD.bazel REPO.bazel Tests/
 
 # `shell: bash` adds `-o pipefail`.
 defaults:
@@ -127,6 +134,7 @@ jobs:
           BUMP: ${{ inputs.bump }}
           GH_TOKEN: ${{ github.token }}
           RULES_TOKEN: ${{ steps.app.outputs.token }}
+          DRY_RUN: ${{ inputs.dry_run }}
         run: python3 .github/scripts/release.py plan
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -188,8 +196,6 @@ jobs:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_BOT: ${{ steps.app.outputs.app-slug }}[bot]
-          # What the source archive must contain for the Bazel registry entry.
-          ARCHIVE_REQUIRES: MODULE.bazel BUILD.bazel REPO.bazel Tests/
         run: python3 .github/scripts/release.py publish
 
   # DocC runs project and dependency code, so it builds with read access only.

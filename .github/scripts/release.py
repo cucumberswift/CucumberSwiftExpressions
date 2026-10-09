@@ -2,7 +2,8 @@
 """Release helper for .github/workflows/release.yml.
 
   plan     Compute the version from the last release and the chosen bump, check
-           it, and write the release notes.
+           it, and write the release notes. On a dry run, also build and check
+           the source archive, without uploading it.
   publish  Commit the version files, build the source archive, create the tag
            and create the release.
 
@@ -448,6 +449,10 @@ def plan():
            f"- Branch: `{branch}`\n- Last release on this line: `{fmt(last)}`\n"
            f"- Kind: `{bump}`\n- Marked Latest: {'yes' if latest else 'no'}\n\n"
            f"### Release notes\n\n{text}")
+    # The release job builds the archive again from the tagged commit, and uploads it.
+    if os.environ.get("DRY_RUN") == "true":
+        _, integrity = source_archive(repo, version, sha)
+        archive_summary(repo, version, integrity, True, sha)
 
 
 # publish ---------------------------------------------------------------------
@@ -465,8 +470,10 @@ def set_version(path, content, version):
 
 def source_archive(repo, version, commit):
     """Build the release's source archive from `commit` with git archive, check
-    it, and return its file name. Bazel registry entries pin its checksum, which
-    GitHub's on-demand tag archives do not keep stable."""
+    it, and return its file name and its integrity value. A Bazel registry entry
+    downloads it and pins that value. GitHub's on-demand tag archives
+    (/archive/refs/tags/...) are not guaranteed to stay byte-for-byte the same,
+    and the registry flags them; an asset of an immutable release never changes."""
     name = f"{repo.split('/')[1]}-{version}"
     path = f"{name}.tar.gz"
     # The version commit, if there is one, was made through the API.
@@ -492,9 +499,20 @@ def source_archive(repo, version, commit):
         fail(f"{path} is missing {', '.join(missing)}, or has them as another kind of file.")
     with open(path, "rb") as handle:
         digest = hashlib.sha256(handle.read()).digest()
-    append("GITHUB_STEP_SUMMARY", f"Source archive {path}: integrity sha256-{base64.b64encode(digest).decode()}, "
-                                  f"strip_prefix {name}.\n")
-    return path
+    return path, f"sha256-{base64.b64encode(digest).decode()}"
+
+
+def archive_summary(repo, version, integrity, dry_run, sha):
+    """The source archive's section of the run's summary: what a registry
+    entry's source.json needs. A dry run builds it from `sha` and uploads nothing."""
+    name = f"{repo.split('/')[1]}-{version}"
+    text = (f"\n### Source archive\n\n- Name: `{name}.tar.gz`\n"
+            f"- URL: https://github.com/{repo}/releases/download/{version}/{name}.tar.gz\n"
+            f"- Integrity: `{integrity}`\n- Strip prefix: `{name}`\n")
+    if dry_run:
+        text += (f"\nDry run: built from `{sha}` and not uploaded. A release that makes a version commit builds "
+                 "the archive from that commit, so its integrity differs.\n")
+    append("GITHUB_STEP_SUMMARY", text)
 
 
 def publish():
@@ -551,7 +569,7 @@ def publish():
                 fail(f"{branch} moved during the run. Nothing was tagged or released. Start a new run.")
 
     # Built before the tag, so a bad archive leaves no tag behind.
-    archive = source_archive(repo, version, commit)
+    archive, integrity = source_archive(repo, version, commit)
 
     # The tag: reuse it only if it points to exactly this commit.
     ref = api(f"repos/{repo}/git/ref/tags/{version}", allow=(404,))
@@ -577,6 +595,7 @@ def publish():
     else:
         print(f"The release {version} already exists. Nothing to do.")
     append("GITHUB_STEP_SUMMARY", f"Released {version} at {commit}.\n")
+    archive_summary(repo, version, integrity, False, commit)
 
 
 if __name__ == "__main__":
