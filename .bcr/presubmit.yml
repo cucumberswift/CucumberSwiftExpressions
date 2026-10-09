@@ -1,0 +1,35 @@
+# The presubmit for this module's Bazel Central Registry entries. Each release's
+# entry copies it. The test module is Tests/ in the release's source archive.
+matrix:
+  platform:
+  - macos
+  - macos_arm64
+  bazel:
+  - 8.x
+  - 9.x
+tasks:
+  verify_targets:
+    name: Verify build targets
+    platform: ${{ platform }}
+    bazel: ${{ bazel }}
+    build_targets:
+    - '@cucumberswift_expressions//:CucumberSwiftExpressions'
+bcr_test_module:
+  module_path: Tests
+  matrix:
+    platform:
+    - macos
+    - macos_arm64
+    bazel:
+    - 8.x
+    - 9.x
+  tasks:
+    run_test_module:
+      name: Run test module
+      platform: ${{ platform }}
+      bazel: ${{ bazel }}
+      # The macOS tests, at macOS 10.15, run with `xcrun xctest` (Tests/xctest_runner.bzl).
+      # The iOS tests are left out: they need a simulator.
+      test_targets:
+      - //:CucumberSwiftExpressionsTests
+      - //:xctest_runner_test
