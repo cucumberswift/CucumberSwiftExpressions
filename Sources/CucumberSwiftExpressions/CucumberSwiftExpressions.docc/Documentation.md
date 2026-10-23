@@ -1,12 +1,23 @@
 # ``CucumberSwiftExpressions``
 
-A cucumber expressions implementation in Swift.
+A Swift implementation of Cucumber expressions.
 
 ## Overview
 
-Cucumber expressions are a simpler alternative to regular expressions for matching step text: `I have {int} cukes` instead of `^I have (-?\d+) cukes$`. This library parses and matches them in Swift. CucumberSwift uses it, and it also works as a standalone library.
+CucumberSwiftExpressions parses Cucumber expressions and matches them against step text. A Cucumber expression is a simpler way to match step text than a regular expression. You write `I have {int} cukes` instead of `^I have (-?\d+) cukes$`. CucumberSwift uses this library, and you can also use it on its own.
 
-A `CucumberExpression` accepts either kind of pattern, and tells them apart the same way Cucumber's reference implementation does:
+```swift
+import CucumberSwiftExpressions
+
+let expression = CucumberExpression("I have {int} cukes")
+if let match = expression.match(in: "I have 7 cukes") {
+    let count = try match.first(\.int) // 7
+}
+```
+
+### Cucumber expressions and regular expressions
+
+``CucumberExpression`` accepts a Cucumber expression or a regular expression. It tells them apart in the same way as Cucumber's reference implementation:
 
 - A string that starts with `^` or ends with `$` is a regular expression.
 - A string written between slashes, like `/I have (\d+) cukes/`, is a regular expression. The slashes are not part of the pattern.
@@ -14,9 +25,30 @@ A `CucumberExpression` accepts either kind of pattern, and tells them apart the 
 
 In a regular expression, each top-level capture group becomes an anonymous parameter.
 
-If a string is treated as a regular expression but will not compile, creating the expression does not crash. ``CucumberExpression/invalidRegularExpression`` says what is wrong, for example `expected ')'`, and ``CucumberExpression/match(in:)`` traps if you call it anyway. To handle the error with `try` instead, use ``CucumberExpression/init(validating:)``.
+### Invalid regular expressions
 
-To check an expression without matching any text, for example while a step definition compiles, use ``CucumberExpression/Syntax/init(parsing:)``. It lists the arguments a match passes, in order, each with its parameter name and its range in the string. A Cucumber expression that does not follow the specification, such as `I have {int cukes`, throws a ``CucumberExpression/SyntaxError`` with cucumber-jvm's message and the range of the problem. A parameter name that is not built in is an argument, not an error, because custom parameters are registered at run time. ``CucumberExpression/init(_:)`` itself stays lenient.
+The ``CucumberExpression/init(validating:)`` initializer throws when a string is treated as a regular expression that doesn't compile. Use it to handle the error with `try`:
+
+```swift
+do {
+    let expression = try CucumberExpression(validating: "^I have (\\d+ cukes$")
+} catch {
+    print(error)
+}
+```
+
+The plain ``CucumberExpression/init(_:)`` initializer doesn't crash on such a string. Its ``CucumberExpression/invalidRegularExpression`` property says what is wrong, for example `expected ')'`. If you call ``CucumberExpression/match(in:)`` anyway, it traps.
+
+### Checking an expression without matching text
+
+To check an expression without matching any text, for example while a step definition compiles, create a ``CucumberExpression/Syntax`` with ``CucumberExpression/Syntax/init(parsing:)``. The syntax lists the arguments that a match passes, in order. Each argument has its parameter name and its range in the string.
+
+```swift
+let syntax = try CucumberExpression.Syntax(parsing: "I have {int} cukes")
+let names = syntax.arguments.map(\.parameterName) // ["int"]
+```
+
+A Cucumber expression that doesn't follow the specification, such as `I have {int cukes`, throws a ``CucumberExpression/SyntaxError``. The error has cucumber-jvm's message and the range of the problem. A parameter name that isn't built in is an argument, not an error, because you register custom parameters at run time. The plain ``CucumberExpression/init(_:)`` initializer doesn't run this check.
 
 ## Installation
 
@@ -49,4 +81,4 @@ Then depend on its `swift_library` from your target in `BUILD.bazel`:
 deps = ["@cucumberswift_expressions//:CucumberSwiftExpressions"],
 ```
 
-The module uses [rules_swift](https://github.com/bazelbuild/rules_swift), and is tested with the Bazel version in its `.bazelversion`.
+The module uses [rules_swift](https://github.com/bazelbuild/rules_swift). Its tests run with the Bazel version in its `.bazelversion`.
