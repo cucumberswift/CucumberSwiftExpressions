@@ -1,14 +1,37 @@
-### Contributing
+# Contributing to CucumberSwiftExpressions
 
-Let's keep this short and sweet. So you want to contribute to CucumberSwift? Cool! There are 3 things required to do so:
+Thank you for contributing to CucumberSwiftExpressions. A contribution needs three things:
 
-- Be available for questions. If there's confusion about what you wrote or why you wrote it that way we need to be able to talk about it before it makes it into main.
-- TEST YOUR CODE! CucumberSwift is primarily black-box tested, that's fine. Feel free to unit test as well, the point is the testing framework really ought to be tested.
-- Submit a Pull Request. At this point you've got everything tested, your new feature or bug fix is in place and you know you'll be near your email for the next few days. Submit your PR and we'll get it turned around and into main ASAP
+- **Be available for questions.** If there's confusion about what you wrote, or why, we need to talk about it before it goes into `main`.
+- **Test your code.** The package is mostly black-box tested, and that's fine. You can add unit tests too. The point is that a testing framework ought to be tested.
+- **Open a pull request** once your change is in place and tested, and you know you'll be near your email for the next few days. We'll review it and get it into `main` as soon as we can.
 
-**Breaking changes need a migration note.** If users have to change something to upgrade, the issue body gets a `## Migration` section that says what to change, with an example. The release notes copy it under the issue's entry, and a release refuses to start while an issue labelled `breaking` has none. Any other issue can have one too, for example when an install channel goes away. Keep it to what users must do; the background belongs in the rest of the issue.
+## Breaking changes need a migration note
 
+If users have to change something to upgrade, add a `## Migration` section to the issue body. It says what to change, with an example. The release notes copy it under the issue's entry. A release doesn't start while an issue labelled `breaking` has no migration note.
 
-**Bazel.** The package is also a Bazel module (`MODULE.bazel`, `BUILD.bazel`). Its tests are a second module in `Tests/`, which depends on the package the way a Bazel project would, so CI's `Bazel tests` job checks the package as a dependency. With [Bazelisk](https://github.com/bazelbuild/bazelisk) installed (`brew install bazelisk`), which runs the Bazel version in `.bazelversion`, run `bazelisk test //...` from the `Tests` folder. That runs the tests on macOS, with `xcrun xctest` through the runner in `Tests/xctest_runner.bzl`, and on an iOS simulator (which needs an iOS simulator runtime installed in Xcode). `.bcr/presubmit.yml` is the presubmit each Bazel Central Registry entry runs: the macOS tests, from `Tests`. CI also runs them on the oldest Bazel major that `MODULE.bazel` allows, against a `git archive` of the commit, as the release archive contains it. A new source or test file needs no change, because the BUILD files glob the folders. A new dependency in `Package.swift` needs a `bazel_dep` in `MODULE.bazel` too. When you add tests, raise `MIN_TESTS` in `CI.yml`.
+Any other issue can have a migration note too, for example when an install channel goes away. Keep it to what users must do. The background belongs in the rest of the issue.
 
-I realize this document is somewhat lacking in terms of process, for now I don't care. If we start seeing more contributors I'll think through more how this should work.
+## Testing with Bazel
+
+The package is also a Bazel module (`MODULE.bazel`, `BUILD.bazel`). Its tests are a second module in `Tests/`. That module depends on the package in the way a Bazel project would, so CI's `Bazel tests` job checks the package as a dependency.
+
+To run the tests, install [Bazelisk](https://github.com/bazelbuild/bazelisk) (`brew install bazelisk`), which runs the Bazel version in `.bazelversion`. Then run this from the `Tests` folder:
+
+```bash
+bazelisk test //...
+```
+
+The command runs the tests on macOS, with `xcrun xctest` through the runner in `Tests/xctest_runner.bzl`. It also runs them on an iOS simulator, which needs an iOS simulator runtime installed in Xcode.
+
+`.bcr/presubmit.yml` is the presubmit that each Bazel Central Registry entry runs. It runs the macOS tests from `Tests`. CI also runs the tests on the oldest Bazel major version that `MODULE.bazel` allows. It runs them against a `git archive` of the commit, which is what the release archive contains.
+
+When you change the package, keep these points in mind:
+
+- A new source or test file needs no change, because the BUILD files glob the folders.
+- A new dependency in `Package.swift` needs a `bazel_dep` in `MODULE.bazel` too.
+- When you add tests, raise `MIN_TESTS` in `CI.yml`.
+
+## More process later
+
+The contributing guide is light on process, and that's fine for now. If more people start contributing, I'll think more about how this should work.
