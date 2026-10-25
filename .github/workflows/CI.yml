@@ -127,11 +127,17 @@ jobs:
       - name: Build every target in the module, as a consumer would
         working-directory: Tests
         run: bazel build @cucumberswift_expressions//... --override_module=cucumberswift_expressions="$MODULE_PATH"
-      # rules_apple can't run tvOS or watchOS tests, so the tag filters leave those bundles out
-      # (see Tests/BUILD.bazel). The tvOS and watchOS tests run through Xcode.
-      - name: Run the tests on macOS and on an iOS simulator
+      # rules_apple can't run tvOS or watchOS tests, so no run tests those bundles (the tag filter in
+      # Tests/.bazelrc leaves them out). Manual runs and pushes to main build them; pull requests
+      # build the package for both in build_for_package_managers.
+      - name: Run the tests on macOS and on an iOS simulator, and build them for tvOS and watchOS
         working-directory: Tests
-        run: bazel test //... --override_module=cucumberswift_expressions="$MODULE_PATH" --test_output=errors --test_tag_filters=-tvos,-watchos --build_tag_filters=-tvos,-watchos
+        run: |
+          filters=()
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            filters+=("--build_tag_filters=-tvos,-watchos")
+          fi
+          bazel test //... --override_module=cucumberswift_expressions="$MODULE_PATH" --test_output=errors "${filters[@]}"
       - name: Check every test ran
         working-directory: Tests
         run: |
