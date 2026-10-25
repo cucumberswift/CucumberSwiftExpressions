@@ -1,0 +1,3 @@
+# rules_apple's default tvOS and watchOS runners fail every test without running it, so no run
+# tests those bundles (see BUILD.bazel). They still build.
+test --test_tag_filters=-tvos,-watchos
